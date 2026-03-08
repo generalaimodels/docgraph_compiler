@@ -45,6 +45,41 @@ function dedent(lines: readonly string[]): string[] {
   return lines.map((line) => line.slice(minIndent));
 }
 
+function createMathBlock(value: string, delimiter: "$$" | "\\[" | "raw"): BlockNode {
+  return {
+    kind: "math-block",
+    nodeId: makeNodeIdAuto(),
+    value,
+    dialect: "latex",
+    delimiter
+  };
+}
+
+function extractStandaloneMath(source: string): { value: string; delimiter: "$$" | "\\[" } | null {
+  const trimmed = source.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  const bracketMatch = trimmed.match(/^\\\[\s*([\s\S]*?)\s*\\\]$/su);
+  if (bracketMatch?.[1]) {
+    return {
+      value: bracketMatch[1].trim(),
+      delimiter: "\\["
+    };
+  }
+
+  const dollarMatch = trimmed.match(/^\$\$\s*([\s\S]*?)\s*\$\$$/su);
+  if (dollarMatch?.[1]) {
+    return {
+      value: dollarMatch[1].trim(),
+      delimiter: "$$"
+    };
+  }
+
+  return null;
+}
+
 function collectIndentedBlock(lines: readonly string[], startIndex: number): { lines: string[]; nextIndex: number } {
   const block: string[] = [];
   let index = startIndex;
@@ -217,6 +252,15 @@ async function mapDirective(
     ];
   }
 
+  if (lower === "math") {
+    const value = dedent(body).join("\n").trim();
+    if (value.length === 0) {
+      return [];
+    }
+
+    return [createMathBlock(value, "raw")];
+  }
+
   if (["image", "figure"].includes(lower)) {
     return [
       {
@@ -276,6 +320,13 @@ async function mapDirective(
   }
 
   if (lower === "raw") {
+    const rawFormat = argument.trim().toLowerCase();
+    const rawContent = body.join("\n").trim();
+    if (["latex", "tex", "math"].includes(rawFormat) && rawContent.length > 0) {
+      const extracted = extractStandaloneMath(rawContent);
+      return [createMathBlock(extracted?.value ?? rawContent, extracted?.delimiter ?? "raw")];
+    }
+
     return [
       {
         kind: "raw-embed",
@@ -377,6 +428,14 @@ export async function parseRstBlocks(source: string, builder: IRBuilder, ctx: Pa
       }
       paragraphLines.push(candidate.trim());
       paragraphIndex += 1;
+    }
+
+    const paragraphSource = paragraphLines.join("\n");
+    const standaloneMath = extractStandaloneMath(paragraphSource);
+    if (standaloneMath) {
+      blocks.push(createMathBlock(standaloneMath.value, standaloneMath.delimiter));
+      index = paragraphIndex;
+      continue;
     }
 
     const paragraphText = paragraphLines.join(" ");

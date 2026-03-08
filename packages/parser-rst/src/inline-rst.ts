@@ -2,7 +2,7 @@ import type { IRBuilder } from "@docgraph/core-ir";
 import type { InlineNode, LinkType } from "@docgraph/core-types";
 
 const INLINE_PATTERN =
-  /(`([^`]+?)\s*<([^>]+)>`_|:([a-zA-Z0-9_.:-]+):`([^`]+)`|``([^`]+)``|\*\*([^*]+)\*\*|\*([^*]+)\*)/gu;
+  /(`(?<linkText>[^`]+?)\s*<(?<linkHref>[^>]+)>`_|:(?<roleName>[a-zA-Z0-9_.:-]+):`(?<roleValue>[^`]+)`|``(?<codeValue>[^`]+)``|\\\((?<parenMathValue>.+?)\\\)|(?<!\\)\$(?<dollarMathValue>[^$\n]+?)(?<!\\)\$|\*\*(?<strongValue>[^*]+)\*\*|\*(?<emphasisValue>[^*]+)\*)/gsu;
 
 function classifyLink(href: string): { linkType: LinkType; resolved: boolean; anchor?: string } {
   if (/^(?:https?:)?\/\//u.test(href) || href.startsWith("mailto:")) {
@@ -63,12 +63,13 @@ export function parseInlineRst(text: string, builder: IRBuilder, sourceLine?: nu
 
   for (const match of text.matchAll(INLINE_PATTERN)) {
     const index = match.index ?? 0;
+    const groups = match.groups ?? {};
     if (index > cursor) {
       nodes.push({ kind: "text", value: text.slice(cursor, index) });
     }
 
-    if (match[2] && match[3]) {
-      const href = match[3];
+    if (groups.linkText && groups.linkHref) {
+      const href = groups.linkHref;
       const classification = classifyLink(href);
       builder.addLink({
         hrefRaw: href,
@@ -80,13 +81,13 @@ export function parseInlineRst(text: string, builder: IRBuilder, sourceLine?: nu
       nodes.push({
         kind: "link",
         href,
-        children: [{ kind: "text", value: match[2] }],
+        children: [{ kind: "text", value: groups.linkText }],
         ...(classification.linkType === "doc-to-external" ? { external: true } : {}),
         ...(classification.anchor ? { resolvedAnchor: classification.anchor } : {})
       });
-    } else if (match[4] && match[5]) {
-      const role = match[4];
-      const target = match[5];
+    } else if (groups.roleName && groups.roleValue) {
+      const role = groups.roleName;
+      const target = groups.roleValue;
       if (role === "doc" || role === "ref") {
         const href = target.endsWith(".html") ? target : `${target}.html`;
         const classification = classifyLink(href);
@@ -103,15 +104,36 @@ export function parseInlineRst(text: string, builder: IRBuilder, sourceLine?: nu
           children: [{ kind: "text", value: target }],
           ...(classification.anchor ? { resolvedAnchor: classification.anchor } : {})
         });
+      } else if (role === "math") {
+        nodes.push({
+          kind: "math-inline",
+          value: target,
+          dialect: "latex",
+          delimiter: "\\("
+        });
       } else {
         nodes.push({ kind: "inline-code", value: target });
       }
-    } else if (match[6]) {
-      nodes.push({ kind: "inline-code", value: match[6] });
-    } else if (match[7]) {
-      nodes.push({ kind: "strong", children: [{ kind: "text", value: match[7] }] });
-    } else if (match[8]) {
-      nodes.push({ kind: "emphasis", children: [{ kind: "text", value: match[8] }] });
+    } else if (groups.codeValue) {
+      nodes.push({ kind: "inline-code", value: groups.codeValue });
+    } else if (groups.parenMathValue) {
+      nodes.push({
+        kind: "math-inline",
+        value: groups.parenMathValue,
+        dialect: "latex",
+        delimiter: "\\("
+      });
+    } else if (groups.dollarMathValue) {
+      nodes.push({
+        kind: "math-inline",
+        value: groups.dollarMathValue,
+        dialect: "latex",
+        delimiter: "$"
+      });
+    } else if (groups.strongValue) {
+      nodes.push({ kind: "strong", children: [{ kind: "text", value: groups.strongValue }] });
+    } else if (groups.emphasisValue) {
+      nodes.push({ kind: "emphasis", children: [{ kind: "text", value: groups.emphasisValue }] });
     }
 
     cursor = index + match[0].length;

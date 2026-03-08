@@ -43,4 +43,37 @@ describe("RstAdapter", () => {
     expect(result.ir.blocks.some((block) => block.kind === "code-block")).toBe(true);
     expect(result.ir.linkGraph[0]?.hrefRaw).toBe("guide.rst");
   });
+
+  it("parses inline math, math directives, and raw latex directives into math nodes", async () => {
+    const adapter = new RstAdapter();
+    const result = await adapter.parse(
+      createContext(
+        [
+          "Math",
+          "====",
+          "",
+          "Inline :math:`\\theta^2 + \\lambda` and \\(a + b\\).",
+          "",
+          ".. math::",
+          "",
+          "   \\theta^{*} = \\arg\\min_{\\theta} \\mathcal{L}(\\theta)",
+          "",
+          ".. raw:: latex",
+          "",
+          "   \\[",
+          "   \\mathcal{D} = \\{x_1, x_2\\}",
+          "   \\]"
+        ].join("\n")
+      )
+    );
+
+    const paragraph = result.ir.blocks.find((block) => block.kind === "paragraph");
+    const mathBlocks = result.ir.blocks.filter((block) => block.kind === "math-block");
+
+    expect(paragraph?.kind).toBe("paragraph");
+    expect(paragraph?.children.some((child) => child.kind === "math-inline")).toBe(true);
+    expect(mathBlocks).toHaveLength(2);
+    expect(mathBlocks[0] && "value" in mathBlocks[0] ? mathBlocks[0].value : "").toContain("\\arg\\min");
+    expect(mathBlocks[1] && "value" in mathBlocks[1] ? mathBlocks[1].value : "").toContain("\\mathcal{D}");
+  });
 });

@@ -1,5 +1,21 @@
 import type { BlockNode, DocumentIR, InlineNode, NotebookOutputNode } from "@docgraph/core-types";
+import katex from "katex";
 import { escapeHtml, sanitizeHtmlFragment } from "@docgraph/security";
+
+function renderLatex(value: string, displayMode: boolean): string {
+  try {
+    return katex.renderToString(value, {
+      displayMode,
+      output: "htmlAndMathml",
+      strict: "warn",
+      throwOnError: false,
+      trust: false
+    });
+  } catch {
+    const fallbackClass = displayMode ? "dg-math-block-fallback" : "dg-math-inline-fallback";
+    return `<code class="${fallbackClass}">${escapeHtml(value)}</code>`;
+  }
+}
 
 function renderInline(nodes: readonly InlineNode[]): string {
   return nodes
@@ -20,7 +36,7 @@ function renderInline(nodes: readonly InlineNode[]): string {
         case "image":
           return `<img src="${escapeHtml(node.src)}" alt="${escapeHtml(node.alt ?? "")}" />`;
         case "math-inline":
-          return `<code class="dg-math-inline">${escapeHtml(node.value)}</code>`;
+          return `<span class="dg-math-inline" data-dialect="${escapeHtml(node.dialect)}">${renderLatex(node.value, false)}</span>`;
         case "footnote-ref":
           return `<sup>${escapeHtml(node.label ?? node.identifier)}</sup>`;
         case "break":
@@ -98,7 +114,7 @@ function renderBlock(node: BlockNode): string {
     case "code-block":
       return `<pre class="dg-code-block"><code data-language="${escapeHtml(node.language ?? "")}">${escapeHtml(node.value)}</code></pre>`;
     case "math-block":
-      return `<pre class="dg-math-block">${escapeHtml(node.value)}</pre>`;
+      return `<div class="dg-math-block" data-dialect="${escapeHtml(node.dialect)}">${renderLatex(node.value, true)}</div>`;
     case "quote":
       return `<blockquote>${node.children.map(renderBlock).join("")}</blockquote>`;
     case "callout":

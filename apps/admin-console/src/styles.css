@@ -985,7 +985,6 @@ a {
 .dg-doc code,
 .dg-doc pre,
 .dg-doc .dg-code-block,
-.dg-doc .dg-math-block,
 .dg-doc .dg-notebook-text,
 .dg-doc .dg-notebook-json,
 .dg-doc .dg-notebook-error {
@@ -1017,7 +1016,6 @@ a {
 }
 
 .dg-code-block,
-.dg-math-block,
 .dg-notebook-text,
 .dg-notebook-json,
 .dg-notebook-error {
@@ -1026,6 +1024,42 @@ a {
   background: linear-gradient(180deg, #101826, #0f172a);
   color: #e5eef9;
   padding: 18px;
+}
+
+.dg-math-inline {
+  display: inline-flex;
+  align-items: baseline;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.dg-math-inline .katex {
+  font-size: 1.02em;
+  max-width: 100%;
+}
+
+.dg-math-block {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-radius: 20px;
+  border: 1px solid rgba(17, 94, 89, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 249, 248, 0.94)),
+    linear-gradient(180deg, rgba(15, 118, 110, 0.04), transparent);
+  padding: 18px 22px;
+}
+
+.dg-math-block .katex-display {
+  margin: 0;
+}
+
+.dg-math-block .katex-display > .katex {
+  text-align: left;
+}
+
+.dg-math-inline-fallback,
+.dg-math-block-fallback {
+  font-family: var(--code-font);
 }
 
 .dg-callout {

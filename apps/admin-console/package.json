@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@docgraph/api-contracts": "file:../../packages/api-contracts",
+    "katex": "latest",
     "react": "latest",
     "react-dom": "latest"
   }

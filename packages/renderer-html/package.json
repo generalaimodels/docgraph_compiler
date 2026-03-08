@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@docgraph/core-types": "file:../core-types",
-    "@docgraph/security": "file:../security"
+    "@docgraph/security": "file:../security",
+    "katex": "latest"
   }
 }

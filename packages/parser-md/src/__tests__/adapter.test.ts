@@ -31,4 +31,19 @@ describe("MarkdownAdapter", () => {
     expect(result.ir.linkGraph).toHaveLength(1);
     expect(result.ir.linkGraph[0]?.hrefRaw).toBe("./api.md");
   });
+
+  it("normalizes inline and block latex delimiters into math nodes", async () => {
+    const adapter = new MarkdownAdapter();
+    const result = await adapter.parse(
+      createContext("# Math\n\nInline \\(a + b\\) and $c + d$.\n\n\\[\n\\theta^{*} = \\arg\\min_{\\theta} \\mathcal{L}(\\theta)\n\\]\n")
+    );
+
+    const paragraph = result.ir.blocks.find((block) => block.kind === "paragraph");
+    const mathBlock = result.ir.blocks.find((block) => block.kind === "math-block");
+
+    expect(paragraph?.kind).toBe("paragraph");
+    expect(paragraph?.children.some((child) => child.kind === "math-inline")).toBe(true);
+    expect(mathBlock?.kind).toBe("math-block");
+    expect(mathBlock && "value" in mathBlock ? mathBlock.value : "").toContain("\\arg\\min");
+  });
 });
