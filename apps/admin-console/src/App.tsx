@@ -332,6 +332,16 @@ function anchorFromHref(href: string): string | null {
   return anchor.length > 0 ? anchor : null;
 }
 
+function sectionOffsetForPage(page: AppPage, sectionId: string): number {
+  const header = document.querySelector(".site-header");
+  const localNavigation = document.querySelector(".local-nav");
+  const headerOffset = header instanceof HTMLElement ? header.getBoundingClientRect().height + 24 : 24;
+  const localNavOffset =
+    sectionId !== defaultSectionId(page) && localNavigation instanceof HTMLElement ? localNavigation.getBoundingClientRect().height + 18 : 0;
+
+  return headerOffset + localNavOffset;
+}
+
 function countWords(text: string): number {
   const trimmed = text.trim();
   if (trimmed.length === 0) {
@@ -792,6 +802,19 @@ export function App() {
     });
   }
 
+  function scrollToPageSection(nextPage: AppPage, sectionId: string): void {
+    const target = document.getElementById(sectionId);
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    const top = window.scrollY + target.getBoundingClientRect().top - sectionOffsetForPage(nextPage, sectionId);
+    window.scrollTo({
+      top: Math.max(0, top),
+      behavior: "auto"
+    });
+  }
+
   function handlePreviewClick(event: ReactMouseEvent<HTMLDivElement>): void {
     const target = event.target instanceof HTMLElement ? event.target.closest("a") : null;
     if (!(target instanceof HTMLAnchorElement) || !selectedDocument) {
@@ -894,14 +917,7 @@ export function App() {
     }
 
     const frameId = window.requestAnimationFrame(() => {
-      const target = document.getElementById(pendingSectionId);
-      if (target instanceof HTMLElement) {
-        target.scrollIntoView({
-          behavior: "smooth",
-          block: "start"
-        });
-      }
-
+      scrollToPageSection(page, pendingSectionId);
       setPendingSectionId(null);
     });
 

@@ -171,8 +171,9 @@ a {
   top: 18px;
   z-index: 20;
   display: grid;
-  gap: 16px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px 24px;
+  align-items: center;
 }
 
 .brand-block {
@@ -202,11 +203,12 @@ a {
   display: grid;
   gap: 10px;
   min-width: 0;
+  justify-items: end;
 }
 
 .page-switch {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-start;
   gap: 8px;
   padding: 8px;
@@ -215,7 +217,14 @@ a {
   border: 1px solid rgba(109, 128, 160, 0.14);
   box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(14px);
-  width: 100%;
+  width: max-content;
+  max-width: min(100%, 1000px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.page-switch::-webkit-scrollbar {
+  display: none;
 }
 
 .page-switch button,
@@ -260,6 +269,7 @@ a {
   color: var(--muted);
   font-size: 0.94rem;
   line-height: 1.5;
+  text-align: right;
 }
 
 .site-error-banner {
@@ -474,7 +484,7 @@ a {
 }
 
 .local-nav {
-  display: flex;
+  display: inline-flex;
   flex-wrap: nowrap;
   gap: 10px;
   padding: 10px;
@@ -484,7 +494,9 @@ a {
   z-index: 16;
   background: rgba(255, 255, 255, 0.78);
   border: 1px solid rgba(109, 128, 160, 0.14);
-  width: 100%;
+  width: max-content;
+  max-width: 100%;
+  justify-self: start;
   overflow-x: auto;
   box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(14px);
@@ -1460,9 +1472,22 @@ a {
 }
 
 @media (max-width: 1500px) {
+  .site-header {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
   .page-switch,
   .site-nav-stack {
     grid-column: 1 / -1;
+  }
+
+  .site-nav-stack {
+    justify-items: start;
+  }
+
+  .site-context {
+    text-align: left;
   }
 
   .reader-page-grid {
@@ -1536,6 +1561,14 @@ a {
   .mode-switch,
   .view-switch {
     width: 100%;
+  }
+
+  .site-nav-stack {
+    justify-items: stretch;
+  }
+
+  .page-switch {
+    max-width: 100%;
   }
 
   .page-card-grid,
