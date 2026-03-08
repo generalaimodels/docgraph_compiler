@@ -730,10 +730,10 @@ a {
 }
 
 .preview-surface {
-  display: flex;
-  justify-content: center;
+  display: grid;
+  align-content: start;
   min-height: 100%;
-  padding: clamp(6px, 0.6vw, 10px) clamp(8px, 1vw, 16px);
+  padding: 0;
 }
 
 .code-pane {
@@ -865,8 +865,9 @@ a {
 }
 
 .dg-doc {
-  width: min(100%, clamp(840px, 52vw, 1120px));
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 248, 242, 0.98)),
     linear-gradient(180deg, rgba(15, 118, 110, 0.03), transparent 24%);
@@ -877,6 +878,8 @@ a {
   line-height: 1.78;
   font-family: var(--reader-font);
   font-size: clamp(1.04rem, 0.88vw, 1.2rem);
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 
 .dg-doc-header {
@@ -934,9 +937,49 @@ a {
   margin: 1.05rem 0 1.28rem;
 }
 
+.dg-doc p,
+.dg-doc li,
+.dg-doc blockquote,
+.dg-doc td {
+  overflow-wrap: anywhere;
+}
+
 .dg-doc ul,
 .dg-doc ol {
   padding-left: 1.4rem;
+}
+
+.dg-doc > .dg-doc-header,
+.dg-doc > h1,
+.dg-doc > h2,
+.dg-doc > h3,
+.dg-doc > h4,
+.dg-doc > h5,
+.dg-doc > h6,
+.dg-doc > p,
+.dg-doc > ul,
+.dg-doc > ol,
+.dg-doc > blockquote,
+.dg-doc > figure,
+.dg-doc > .dg-callout,
+.dg-doc > .dg-notebook-cell {
+  width: min(100%, 78ch);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.dg-doc > .dg-doc-header {
+  width: min(100%, 84rem);
+}
+
+.dg-doc > pre,
+.dg-doc > table,
+.dg-doc > .dg-code-block,
+.dg-doc > .dg-math-block,
+.dg-doc > .dg-notebook-text,
+.dg-doc > .dg-notebook-json,
+.dg-doc > .dg-notebook-error {
+  width: 100%;
 }
 
 .dg-doc code,
@@ -1016,10 +1059,21 @@ a {
   color: #3d3a35;
 }
 
+.dg-doc pre {
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  tab-size: 2;
+}
+
 .dg-doc table {
+  display: block;
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
-  overflow: hidden;
+  overflow: auto;
   border-radius: 14px;
 }
 
