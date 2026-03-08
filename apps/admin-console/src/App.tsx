@@ -114,21 +114,16 @@ function defaultSectionId(page: AppPage): string | null {
   return PAGE_SECTIONS[page][0]?.id ?? null;
 }
 
-function isValidPageSection(page: AppPage, sectionId: string): boolean {
-  return PAGE_SECTIONS[page].some((section) => section.id === sectionId);
-}
-
-function buildHash(page: AppPage, sectionId?: string | null): string {
-  return sectionId ? `#${page}/${sectionId}` : `#${page}`;
+function buildHash(page: AppPage): string {
+  return `#${page}`;
 }
 
 function readRouteFromHash(hash: string): { page: AppPage; sectionId: string | null } {
   const normalized = hash.replace(/^#/u, "").trim().toLowerCase();
-  const [pageCandidate = "", sectionCandidate = ""] = normalized.split("/");
+  const [pageCandidate = ""] = normalized.split("/");
   const page: AppPage =
     pageCandidate === "conversion" || pageCandidate === "reader" || pageCandidate === "metrics" ? pageCandidate : "main";
-  const sectionId = isValidPageSection(page, sectionCandidate) ? sectionCandidate : null;
-  return { page, sectionId };
+  return { page, sectionId: null };
 }
 
 function isTerminal(state: JobSummary["state"]): boolean {
@@ -419,11 +414,9 @@ export function App() {
   const [page, setPage] = useState<AppPage>(() => readRouteFromHash(typeof window === "undefined" ? "" : window.location.hash).page);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(() => {
     const route = readRouteFromHash(typeof window === "undefined" ? "" : window.location.hash);
-    return route.sectionId ?? defaultSectionId(route.page);
+    return defaultSectionId(route.page);
   });
-  const [pendingSectionId, setPendingSectionId] = useState<string | null>(() =>
-    readRouteFromHash(typeof window === "undefined" ? "" : window.location.hash).sectionId
-  );
+  const [pendingSectionId, setPendingSectionId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("file");
   const [readerView, setReaderView] = useState<ReaderView>("rendered");
   const [sourceText, setSourceText] = useState<string>("# Start here\n\nDocGraph Compiler is live.");
@@ -760,7 +753,7 @@ export function App() {
       return;
     }
 
-    const nextHash = buildHash(nextPage, sectionId);
+    const nextHash = buildHash(nextPage);
     if (window.location.hash !== nextHash) {
       if (historyMode === "replace") {
         window.history.replaceState(null, "", nextHash);
@@ -884,20 +877,40 @@ export function App() {
       return;
     }
 
+    const previousScrollRestoration = "scrollRestoration" in window.history ? window.history.scrollRestoration : null;
+
     const onHashChange = () => {
       const route = readRouteFromHash(window.location.hash);
       setPage(route.page);
-      setActiveSectionId(route.sectionId ?? defaultSectionId(route.page));
-      setPendingSectionId(route.sectionId ?? defaultSectionId(route.page));
+      setActiveSectionId(defaultSectionId(route.page));
+      setPendingSectionId(defaultSectionId(route.page));
     };
 
     if (!window.location.hash) {
-      window.history.replaceState(null, "", buildHash("main", defaultSectionId("main")));
+      window.history.replaceState(null, "", buildHash("main"));
+    } else {
+      const route = readRouteFromHash(window.location.hash);
+      const normalizedHash = buildHash(route.page);
+      if (window.location.hash !== normalizedHash) {
+        window.history.replaceState(null, "", normalizedHash);
+      }
     }
+
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+
+    const initialRoute = readRouteFromHash(window.location.hash);
+    setActiveSectionId(defaultSectionId(initialRoute.page));
+    setPendingSectionId(defaultSectionId(initialRoute.page));
 
     window.addEventListener("hashchange", onHashChange);
     return () => {
       window.removeEventListener("hashchange", onHashChange);
+
+      if (previousScrollRestoration && "scrollRestoration" in window.history) {
+        window.history.scrollRestoration = previousScrollRestoration;
+      }
     };
   }, []);
 
@@ -906,10 +919,10 @@ export function App() {
       return;
     }
 
-    if (!activeSectionId || !isValidPageSection(page, activeSectionId)) {
+    if (!activeSectionId || !currentPageSections.some((section) => section.id === activeSectionId)) {
       setActiveSectionId(currentDefaultSectionId);
     }
-  }, [activeSectionId, currentDefaultSectionId, page]);
+  }, [activeSectionId, currentDefaultSectionId, currentPageSections]);
 
   useEffect(() => {
     if (!pendingSectionId || typeof window === "undefined") {
@@ -951,10 +964,6 @@ export function App() {
         }
 
         setActiveSectionId(nextSectionId);
-        const nextHash = buildHash(page, nextSectionId);
-        if (window.location.hash !== nextHash) {
-          window.history.replaceState(null, "", nextHash);
-        }
       },
       {
         root: null,
