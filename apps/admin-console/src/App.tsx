@@ -3,7 +3,7 @@ import type { FormEvent } from "react";
 import type { DocumentResponse, DocumentSummary, JobSummary } from "@docgraph/api-contracts";
 
 type Mode = "file" | "local" | "repo";
-type ReaderView = "rendered" | "markdown" | "ir";
+type ReaderView = "rendered" | "markdown" | "ir" | "source";
 
 type CounterRecord = {
   key: string;
@@ -78,6 +78,70 @@ function sourceKindLabel(kind?: NonNullable<JobSummary["source"]>["kind"]): stri
     default:
       return "Source";
   }
+}
+
+function pathDepth(path: string): number {
+  return path.split("/").filter(Boolean).length;
+}
+
+function isInternalArtifactPath(path: string): boolean {
+  return path
+    .toLowerCase()
+    .split("/")
+    .some((segment) => segment.startsWith("_"));
+}
+
+function isLandingDocument(path: string): boolean {
+  return /(?:^|\/)(?:index|readme|overview|intro(?:duction)?|getting[-_ ]started)\.[^.]+$/iu.test(path);
+}
+
+function fallbackDocumentTitle(path: string): string {
+  const basename = path.split("/").at(-1) ?? path;
+  const normalized = basename.replace(/\.[^.]+$/u, "").replace(/[_-]+/gu, " ").trim();
+  return normalized.length > 0 ? normalized : path;
+}
+
+function documentLabel(document?: Pick<DocumentSummary, "title" | "path"> | null): string {
+  if (!document) {
+    return "Select a compiled document";
+  }
+
+  return document.title ?? fallbackDocumentTitle(document.path);
+}
+
+function documentRank(document: Pick<DocumentSummary, "path" | "title" | "diagnostics">): number {
+  let score = 0;
+
+  if (!isInternalArtifactPath(document.path)) {
+    score += 2_000;
+  }
+
+  if (document.title) {
+    score += 600;
+  }
+
+  if (isLandingDocument(document.path)) {
+    score += 450;
+  }
+
+  score -= pathDepth(document.path) * 12;
+  score -= document.diagnostics.length * 40;
+
+  return score;
+}
+
+function compareDocuments(left: DocumentSummary, right: DocumentSummary): number {
+  const rankDelta = documentRank(right) - documentRank(left);
+  if (rankDelta !== 0) {
+    return rankDelta;
+  }
+
+  const titleDelta = documentLabel(left).localeCompare(documentLabel(right));
+  if (titleDelta !== 0) {
+    return titleDelta;
+  }
+
+  return left.path.localeCompare(right.path);
 }
 
 function formatLatency(milliseconds: number | null): string {
@@ -161,6 +225,7 @@ export function App() {
   const [selectedDocument, setSelectedDocument] = useState<DocumentResponse | null>(null);
   const [jobDocuments, setJobDocuments] = useState<DocumentSummary[]>([]);
   const [documentFilter, setDocumentFilter] = useState<string>("");
+  const [showInternalArtifacts, setShowInternalArtifacts] = useState<boolean>(false);
   const [platformMetrics, setPlatformMetrics] = useState<HealthResponse["metrics"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pollTimerRef = useRef<number | null>(null);
@@ -175,9 +240,16 @@ export function App() {
     [jobDocuments, selectedDocumentId]
   );
 
+  const rankedDocuments = useMemo(() => [...jobDocuments].sort(compareDocuments), [jobDocuments]);
+
+  const preferredDocuments = useMemo(() => {
+    const visibleDocuments = rankedDocuments.filter((document) => showInternalArtifacts || !isInternalArtifactPath(document.path));
+    return visibleDocuments.length > 0 ? visibleDocuments : rankedDocuments;
+  }, [rankedDocuments, showInternalArtifacts]);
+
   const filteredDocuments = useMemo(() => {
     const normalizedQuery = documentFilter.trim().toLowerCase();
-    const documents = [...jobDocuments].sort((left, right) => left.path.localeCompare(right.path));
+    const documents = preferredDocuments;
 
     if (normalizedQuery.length === 0) {
       return documents;
@@ -187,7 +259,7 @@ export function App() {
       const haystack = `${document.title ?? ""} ${document.path} ${document.format}`.toLowerCase();
       return haystack.includes(normalizedQuery);
     });
-  }, [documentFilter, jobDocuments]);
+  }, [documentFilter, preferredDocuments]);
 
   const activeJobOverview = useMemo(() => {
     if (!activeJob) {
@@ -233,11 +305,27 @@ export function App() {
   }, [selectedDocument]);
 
   const libraryOverview = useMemo(() => {
+    const internalArtifacts = jobDocuments.filter((document) => isInternalArtifactPath(document.path)).length;
+
     return {
       documents: jobDocuments.length,
-      diagnostics: jobDocuments.reduce((total, document) => total + document.diagnostics.length, 0)
+      diagnostics: jobDocuments.reduce((total, document) => total + document.diagnostics.length, 0),
+      internalArtifacts,
+      readerDocuments: Math.max(jobDocuments.length - internalArtifacts, 0)
     };
   }, [jobDocuments]);
+
+  const selectedDocumentEntry = useMemo(
+    () => selectedDocument ?? activeDocumentSummary ?? null,
+    [activeDocumentSummary, selectedDocument]
+  );
+
+  const selectedDocumentIsInternal = useMemo(
+    () => (selectedDocumentEntry ? isInternalArtifactPath(selectedDocumentEntry.path) : false),
+    [selectedDocumentEntry]
+  );
+
+  const readerTitle = useMemo(() => documentLabel(selectedDocumentEntry), [selectedDocumentEntry]);
 
   const platformOverview = useMemo(() => {
     if (!platformMetrics) {
@@ -367,16 +455,21 @@ export function App() {
   }, [activeJobId, jobs]);
 
   useEffect(() => {
-    if (jobDocuments.length === 0) {
+    if (preferredDocuments.length === 0) {
       setSelectedDocumentId(null);
       setSelectedDocument(null);
       return;
     }
 
-    if (!selectedDocumentId || !jobDocuments.some((document) => document.docId === selectedDocumentId)) {
-      setSelectedDocumentId(jobDocuments[0]?.docId ?? null);
+    const selectedDocumentSummary = jobDocuments.find((document) => document.docId === selectedDocumentId) ?? null;
+    const needsPreferredSelection =
+      !selectedDocumentSummary ||
+      (!showInternalArtifacts && selectedDocumentSummary && isInternalArtifactPath(selectedDocumentSummary.path));
+
+    if (needsPreferredSelection) {
+      setSelectedDocumentId(preferredDocuments[0]?.docId ?? null);
     }
-  }, [jobDocuments, selectedDocumentId]);
+  }, [jobDocuments, preferredDocuments, selectedDocumentId, showInternalArtifacts]);
 
   useEffect(() => {
     let cancelled = false;
@@ -665,8 +758,8 @@ export function App() {
           <section className="panel reader-header">
             <div className="reader-header-copy">
               <p className="eyebrow">Reader</p>
-              <h2>{selectedDocument?.title ?? activeDocumentSummary?.title ?? "Select a compiled document"}</h2>
-              <p className="reader-path">{selectedDocument?.path ?? activeDocumentSummary?.path ?? activeJob?.source?.label ?? "Awaiting import."}</p>
+              <h2>{readerTitle}</h2>
+              <p className="reader-path">{selectedDocumentEntry?.path ?? activeJob?.source?.label ?? "Awaiting import."}</p>
             </div>
 
             <div className="metric-grid">
@@ -691,6 +784,9 @@ export function App() {
             <div className="reader-chip-row">
               <span className="reader-chip">{selectedDocument?.format ?? activeDocumentSummary?.format ?? "n/a"}</span>
               <span className={`reader-chip tone-${toneForJobState(activeJob?.state ?? "queued")}`}>{formatStateLabel(activeJob?.state ?? "queued")}</span>
+              <span className={`reader-chip ${selectedDocumentIsInternal ? "tone-warning" : "tone-success"}`}>
+                {selectedDocumentIsInternal ? "internal artifact" : "reader document"}
+              </span>
               <span className="reader-chip">
                 {selectedDocument ? `${selectedDocument.links.length} links` : `${libraryOverview.documents} docs`}
               </span>
@@ -725,6 +821,13 @@ export function App() {
                 >
                   Canonical IR
                 </button>
+                <button
+                  className={readerView === "source" ? "active" : ""}
+                  onClick={() => setReaderView("source")}
+                  type="button"
+                >
+                  Source
+                </button>
               </div>
             </div>
 
@@ -739,7 +842,13 @@ export function App() {
               />
             ) : (
               <pre className="code-pane">
-                <code>{readerView === "markdown" ? selectedDocument?.markdownPreview ?? "" : selectedDocument?.jsonPreview ?? ""}</code>
+                <code>
+                  {readerView === "markdown"
+                    ? selectedDocument?.markdownPreview ?? ""
+                    : readerView === "source"
+                      ? selectedDocument?.sourcePreview ?? "Source preview unavailable for this artifact."
+                      : selectedDocument?.jsonPreview ?? ""}
+                </code>
               </pre>
             )}
           </section>
@@ -749,8 +858,13 @@ export function App() {
           <section className="panel">
             <div className="section-heading">
               <h2>Library</h2>
-              <p>{libraryOverview.documents} artifacts</p>
+              <p>
+                {filteredDocuments.length}/{libraryOverview.documents} visible
+              </p>
             </div>
+            <p className="supporting-copy">
+              {libraryOverview.readerDocuments} reader documents · {libraryOverview.internalArtifacts} internal artifacts
+            </p>
             <label className="document-filter">
               <span>Filter</span>
               <input
@@ -758,6 +872,14 @@ export function App() {
                 onChange={(event) => setDocumentFilter(event.target.value)}
                 placeholder="Search title, path, or format"
               />
+            </label>
+            <label className="toggle-control">
+              <input
+                checked={showInternalArtifacts}
+                onChange={(event) => setShowInternalArtifacts(event.target.checked)}
+                type="checkbox"
+              />
+              <span>Show internal artifacts and templates</span>
             </label>
             <div className="job-list">
               {filteredDocuments.map((document) => (
@@ -771,8 +893,13 @@ export function App() {
                   type="button"
                 >
                   <div className="job-card-header">
-                    <strong>{document.title ?? document.path}</strong>
-                    <span className="status-pill neutral">{document.format}</span>
+                    <strong>{documentLabel(document)}</strong>
+                    <div className="card-badge-row">
+                      <span className="status-pill neutral">{document.format}</span>
+                      <span className={`status-pill ${isInternalArtifactPath(document.path) ? "warning" : "success"}`}>
+                        {isInternalArtifactPath(document.path) ? "internal" : "reader"}
+                      </span>
+                    </div>
                   </div>
                   <span>{document.path}</span>
                   <small>

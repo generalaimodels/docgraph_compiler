@@ -12,6 +12,7 @@ export interface CompiledDocumentRecord {
   htmlPreview: string;
   markdownPreview: string;
   jsonPreview: string;
+  sourcePreview: string | null;
   toc: TocEntry[];
   links: LinkRef[];
   backlinks: LinkRef[];

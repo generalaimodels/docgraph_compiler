@@ -55,6 +55,7 @@ describe("DocGraphCompiler", () => {
     const home = compiler.getDocument(homeId);
     expect(home?.links[0]?.resolved).toBe(true);
     expect(home?.links[0]?.dstDocId).toBe(apiId);
+    expect(home?.sourcePreview).toContain("# Home");
 
     const api = compiler.getDocument(apiId);
     expect(api?.backlinks).toHaveLength(1);
@@ -91,5 +92,9 @@ describe("DocGraphCompiler", () => {
     expect(completed.state).toBe("completed");
     expect(completed.source.kind).toBe("local");
     expect(completed.documentIds).toHaveLength(2);
+    const sourcePreviews = completed.documentIds
+      .map((docId) => compiler.getDocument(docId)?.sourcePreview ?? "")
+      .join("\n");
+    expect(sourcePreviews).toContain("Home");
   });
 });

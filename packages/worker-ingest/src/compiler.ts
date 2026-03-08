@@ -6,7 +6,7 @@ import type { ImportLocalRepoRequest } from "@docgraph/api-contracts";
 import { isTerminalJobState } from "@docgraph/api-contracts";
 import { attachDiagnostics, replaceLinkGraph } from "@docgraph/core-ir";
 import { AdapterRegistry, type ParseContext, type SourceAdapter, type SourceDescriptor } from "@docgraph/core-ir";
-import { makeAssetId, makeDiagnosticId, SUPPORTED_EXTENSIONS, type AssetRef, type Diagnostic, type LinkRef } from "@docgraph/core-types";
+import { makeAssetId, makeDiagnosticId, SUPPORTED_EXTENSIONS, type AssetRef, type Diagnostic, type LinkRef, type SourceFormat } from "@docgraph/core-types";
 import { createLogger, MetricsRegistry, type CounterRecord, type HistogramRecord, type Logger } from "@docgraph/observability";
 import { DocxAdapter } from "@docgraph/parser-docx";
 import { HtmlAdapter } from "@docgraph/parser-html";
@@ -37,6 +37,34 @@ function splitHref(href: string): { path: string; anchor?: string } {
     path,
     ...(anchor ? { anchor } : {})
   };
+}
+
+function isProbablyBinary(bytes: Uint8Array): boolean {
+  const sample = bytes.subarray(0, Math.min(bytes.length, 2048));
+  if (sample.length === 0) {
+    return false;
+  }
+
+  let suspiciousBytes = 0;
+  for (const byte of sample) {
+    if (byte === 0) {
+      return true;
+    }
+
+    if (byte < 9 || (byte > 13 && byte < 32)) {
+      suspiciousBytes += 1;
+    }
+  }
+
+  return suspiciousBytes / sample.length > 0.08;
+}
+
+function createSourcePreview(format: SourceFormat, bytes: Uint8Array): string | null {
+  if (format === "docx" || isProbablyBinary(bytes)) {
+    return null;
+  }
+
+  return new TextDecoder().decode(bytes);
 }
 
 async function runWithConcurrency<TItem>(
@@ -503,6 +531,7 @@ export class DocGraphCompiler {
     const irWithDiagnostics = attachDiagnostics(parsed.ir, extraDiagnostics);
     const ir = extraAssets.length > 0 ? { ...irWithDiagnostics, assets: [...irWithDiagnostics.assets, ...extraAssets] } : irWithDiagnostics;
     const format = resolution?.adapter.format ?? "html";
+    const sourcePreview = createSourcePreview(format, input.bytes);
     const now = new Date().toISOString();
 
     const record: CompiledDocumentRecord = {
@@ -515,6 +544,7 @@ export class DocGraphCompiler {
       htmlPreview: renderHtml(ir),
       markdownPreview: renderMarkdown(ir),
       jsonPreview: renderJson(ir),
+      sourcePreview,
       toc: buildTableOfContents(ir),
       links: ir.linkGraph,
       backlinks: [],

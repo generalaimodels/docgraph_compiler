@@ -46,6 +46,7 @@ export interface DocumentResponse extends DocumentSummary {
   htmlPreview: string;
   markdownPreview: string;
   jsonPreview: string;
+  sourcePreview: string | null;
   toc: TocEntry[];
   links: LinkRef[];
   backlinks: LinkRef[];
