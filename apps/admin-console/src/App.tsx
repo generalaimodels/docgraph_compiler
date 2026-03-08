@@ -261,6 +261,8 @@ export function App() {
     });
   }, [documentFilter, preferredDocuments]);
 
+  const featuredDocuments = useMemo(() => preferredDocuments.slice(0, 3), [preferredDocuments]);
+
   const activeJobOverview = useMemo(() => {
     if (!activeJob) {
       return null;
@@ -608,33 +610,33 @@ export function App() {
     <div className="app-shell">
       <div className="ambient ambient-left" />
       <div className="ambient ambient-right" />
+      <div className="layout-shell">
+        <header className="topbar">
+          <div className="mark">DG//</div>
+          <div className="masthead-copy">
+            <p className="eyebrow">DocGraph Compiler</p>
+            <h1>Graph-native technical reading for repositories that are too large for ordinary docs tooling.</h1>
+            <p className="lede">
+              Import PyTorch-scale sources, normalize them into a canonical IR, and inspect rendered output, markdown export, compiler state, and original source from one reader.
+            </p>
+          </div>
+          <div className="masthead-metrics">
+            <div className="hero-chip">
+              <span>Artifacts</span>
+              <strong>{integerFormatter.format(libraryOverview.documents)}</strong>
+            </div>
+            <div className="hero-chip">
+              <span>Avg compile</span>
+              <strong>{formatLatency(platformOverview?.averageCompileMs ?? null)}</strong>
+            </div>
+            <div className="hero-chip">
+              <span>Active source</span>
+              <strong>{sourceKindLabel(activeJob?.source?.kind)}</strong>
+            </div>
+          </div>
+        </header>
 
-      <header className="topbar">
-        <div className="mark">DG//</div>
-        <div className="masthead-copy">
-          <p className="eyebrow">DocGraph Compiler</p>
-          <h1>Graph-native technical reading for repositories that are too large for ordinary docs tooling.</h1>
-          <p className="lede">
-            Import PyTorch-scale sources, normalize them into a canonical IR, and inspect rendered output, markdown export, and compiler state from one reader.
-          </p>
-        </div>
-        <div className="masthead-metrics">
-          <div className="hero-chip">
-            <span>Artifacts</span>
-            <strong>{integerFormatter.format(libraryOverview.documents)}</strong>
-          </div>
-          <div className="hero-chip">
-            <span>Avg compile</span>
-            <strong>{formatLatency(platformOverview?.averageCompileMs ?? null)}</strong>
-          </div>
-          <div className="hero-chip">
-            <span>Active source</span>
-            <strong>{sourceKindLabel(activeJob?.source?.kind)}</strong>
-          </div>
-        </div>
-      </header>
-
-      <main className="workspace-grid">
+        <main className="workspace-grid">
         <aside className="left-rail">
           <section className="panel">
             <div className="section-heading">
@@ -724,7 +726,7 @@ export function App() {
               <h2>Recent jobs</h2>
               <p>{jobs.length} tracked</p>
             </div>
-            <div className="job-list">
+            <div className="job-list recent-job-list">
               {jobs.map((job) => {
                 const completion = calculateJobCompletion(job);
                 const tone = toneForJobState(job.state);
@@ -794,63 +796,89 @@ export function App() {
           </section>
 
           <section className="panel preview-panel">
-            <div className="section-heading preview-heading">
-              <div>
-                <h2>Document canvas</h2>
-                <p>Rendered preview, markdown export, and canonical IR are available from the same normalized artifact.</p>
+            <div className="preview-toolbar">
+              <div className="preview-heading">
+                <div>
+                  <h2>Document canvas</h2>
+                  <p>Rendered preview, markdown export, canonical IR, and original source are available from the same normalized artifact.</p>
+                </div>
+                <div className="preview-meta-grid">
+                  <div className="preview-meta-card">
+                    <span>Format</span>
+                    <strong>{selectedDocument?.format ?? activeDocumentSummary?.format ?? "n/a"}</strong>
+                  </div>
+                  <div className="preview-meta-card">
+                    <span>Headings</span>
+                    <strong>{selectedDocumentMetrics?.headings ?? 0}</strong>
+                  </div>
+                  <div className="preview-meta-card">
+                    <span>Blocks</span>
+                    <strong>{selectedDocumentMetrics?.blocks ?? 0}</strong>
+                  </div>
+                  <div className="preview-meta-card">
+                    <span>Diagnostics</span>
+                    <strong>{selectedDocumentMetrics?.diagnostics ?? 0}</strong>
+                  </div>
+                </div>
               </div>
-              <div className="view-switch">
-                <button
-                  className={readerView === "rendered" ? "active" : ""}
-                  onClick={() => setReaderView("rendered")}
-                  type="button"
-                >
-                  Rendered
-                </button>
-                <button
-                  className={readerView === "markdown" ? "active" : ""}
-                  onClick={() => setReaderView("markdown")}
-                  type="button"
-                >
-                  Markdown
-                </button>
-                <button
-                  className={readerView === "ir" ? "active" : ""}
-                  onClick={() => setReaderView("ir")}
-                  type="button"
-                >
-                  Canonical IR
-                </button>
-                <button
-                  className={readerView === "source" ? "active" : ""}
-                  onClick={() => setReaderView("source")}
-                  type="button"
-                >
-                  Source
-                </button>
+              <div className="preview-toolbar-actions">
+                <div className="view-switch">
+                  <button
+                    className={readerView === "rendered" ? "active" : ""}
+                    onClick={() => setReaderView("rendered")}
+                    type="button"
+                  >
+                    Rendered
+                  </button>
+                  <button
+                    className={readerView === "markdown" ? "active" : ""}
+                    onClick={() => setReaderView("markdown")}
+                    type="button"
+                  >
+                    Markdown
+                  </button>
+                  <button
+                    className={readerView === "ir" ? "active" : ""}
+                    onClick={() => setReaderView("ir")}
+                    type="button"
+                  >
+                    Canonical IR
+                  </button>
+                  <button
+                    className={readerView === "source" ? "active" : ""}
+                    onClick={() => setReaderView("source")}
+                    type="button"
+                  >
+                    Source
+                  </button>
+                </div>
               </div>
             </div>
 
-            {readerView === "rendered" ? (
-              <div
-                className="preview-surface"
-                dangerouslySetInnerHTML={{
-                  __html:
-                    selectedDocument?.htmlPreview ??
-                    '<article class="dg-doc"><header class="dg-doc-header"><p class="dg-doc-kicker">ready</p><h1>Import a documentation source</h1></header><p>Use the left rail to compile a file or repository, then inspect the rendered output here with link graph, diagnostics, and source fidelity context preserved.</p></article>'
-                }}
-              />
-            ) : (
-              <pre className="code-pane">
-                <code>
-                  {readerView === "markdown"
-                    ? selectedDocument?.markdownPreview ?? ""
-                    : readerView === "source"
-                      ? selectedDocument?.sourcePreview ?? "Source preview unavailable for this artifact."
-                      : selectedDocument?.jsonPreview ?? ""}
-                </code>
-              </pre>
-            )}
+            <div className="preview-body">
+              <div className="preview-stage">
+                {readerView === "rendered" ? (
+                  <div
+                    className="preview-surface"
+                    dangerouslySetInnerHTML={{
+                      __html:
+                        selectedDocument?.htmlPreview ??
+                        '<article class="dg-doc"><header class="dg-doc-header"><p class="dg-doc-kicker">ready</p><h1>Import a documentation source</h1></header><p>Use the left rail to compile a file or repository, then inspect the rendered output here with link graph, diagnostics, source fidelity, and original source fallback preserved.</p></article>'
+                    }}
+                  />
+                ) : (
+                  <pre className="code-pane">
+                    <code>
+                      {readerView === "markdown"
+                        ? selectedDocument?.markdownPreview ?? ""
+                        : readerView === "source"
+                          ? selectedDocument?.sourcePreview ?? "Source preview unavailable for this artifact."
+                          : selectedDocument?.jsonPreview ?? ""}
+                    </code>
+                  </pre>
+                )}
+              </div>
+            </div>
           </section>
         </section>
 
@@ -865,6 +893,23 @@ export function App() {
             <p className="supporting-copy">
               {libraryOverview.readerDocuments} reader documents · {libraryOverview.internalArtifacts} internal artifacts
             </p>
+            {featuredDocuments.length > 0 ? (
+              <div className="featured-strip">
+                {featuredDocuments.map((document) => (
+                  <button
+                    className="featured-chip"
+                    key={document.docId}
+                    onClick={() => {
+                      setSelectedDocumentId(document.docId);
+                      setReaderView("rendered");
+                    }}
+                    type="button"
+                  >
+                    {documentLabel(document)}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <label className="document-filter">
               <span>Filter</span>
               <input
@@ -881,7 +926,7 @@ export function App() {
               />
               <span>Show internal artifacts and templates</span>
             </label>
-            <div className="job-list">
+            <div className="job-list artifact-list">
               {filteredDocuments.map((document) => (
                 <button
                   className={`job-card ${selectedDocumentId === document.docId ? "active" : ""}`}
@@ -948,7 +993,7 @@ export function App() {
               <h2>Outline</h2>
               <p>{selectedDocument?.toc.length ?? 0} headings</p>
             </div>
-            <ul className="toc-list">
+            <ul className="toc-list panel-scroll">
               {(selectedDocument?.toc ?? []).map((entry) => (
                 <li key={entry.slug} style={{ paddingLeft: `${(entry.level - 1) * 12}px` }}>
                   <a href={`#${entry.slug}`}>{entry.title}</a>
@@ -962,7 +1007,7 @@ export function App() {
               <h2>Diagnostics</h2>
               <p>{selectedDocumentMetrics?.diagnostics ?? 0} items</p>
             </div>
-            <div className="diagnostic-list">
+            <div className="diagnostic-list panel-scroll">
               {(selectedDocument?.diagnostics ?? []).map((diagnostic) => (
                 <div className={`diagnostic ${toneForDiagnosticSeverity(diagnostic.severity)}`} key={diagnostic.id}>
                   <strong>{diagnostic.code}</strong>
@@ -1005,7 +1050,8 @@ export function App() {
             </div>
           </section>
         </aside>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
