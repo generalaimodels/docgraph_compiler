@@ -24,12 +24,22 @@ type HealthResponse = {
   };
 };
 
+type PaginationState = {
+  page: number;
+  pageSize: number;
+};
+
 const compactNumberFormatter = new Intl.NumberFormat("en-US", {
   notation: "compact",
   maximumFractionDigits: 1
 });
 
 const integerFormatter = new Intl.NumberFormat("en-US");
+
+const LIBRARY_PAGE_SIZE = 8;
+const JOB_PAGE_SIZE = 5;
+const TOC_PAGE_SIZE = 12;
+const DIAGNOSTIC_PAGE_SIZE = 6;
 
 function isTerminal(state: JobSummary["state"]): boolean {
   return state === "completed" || state === "failed" || state === "partial_success";
@@ -185,6 +195,25 @@ function meanHistogram(records: readonly HistogramRecord[], prefix: string): num
   return count === 0 ? null : sum / count;
 }
 
+function clampPage(page: number, totalItems: number, pageSize: number): number {
+  return Math.min(Math.max(page, 1), Math.max(1, Math.ceil(totalItems / pageSize)));
+}
+
+function paginateItems<TItem>(items: readonly TItem[], page: number, pageSize: number): readonly TItem[] {
+  const startIndex = (page - 1) * pageSize;
+  return items.slice(startIndex, startIndex + pageSize);
+}
+
+function formatPaginationLabel(page: number, pageSize: number, totalItems: number): string {
+  if (totalItems === 0) {
+    return "0 of 0";
+  }
+
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, totalItems);
+  return `${start}-${end} of ${totalItems}`;
+}
+
 function countWords(text: string): number {
   const trimmed = text.trim();
   if (trimmed.length === 0) {
@@ -205,6 +234,36 @@ async function encodeToBase64(file: File): Promise<string> {
     binary += String.fromCharCode(byte);
   }
   return btoa(binary);
+}
+
+function PaginationControls(props: {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  onPageChange: (nextPage: number) => void;
+}) {
+  const pageCount = Math.max(1, Math.ceil(props.totalItems / props.pageSize));
+
+  if (props.totalItems <= props.pageSize) {
+    return null;
+  }
+
+  return (
+    <div className="pagination-bar">
+      <span>{formatPaginationLabel(props.page, props.pageSize, props.totalItems)}</span>
+      <div className="pagination-actions">
+        <button disabled={props.page <= 1} onClick={() => props.onPageChange(props.page - 1)} type="button">
+          Previous
+        </button>
+        <span>
+          {props.page}/{pageCount}
+        </span>
+        <button disabled={props.page >= pageCount} onClick={() => props.onPageChange(props.page + 1)} type="button">
+          Next
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function App() {
@@ -228,6 +287,22 @@ export function App() {
   const [showInternalArtifacts, setShowInternalArtifacts] = useState<boolean>(false);
   const [platformMetrics, setPlatformMetrics] = useState<HealthResponse["metrics"] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [jobPagination, setJobPagination] = useState<PaginationState>({
+    page: 1,
+    pageSize: JOB_PAGE_SIZE
+  });
+  const [libraryPagination, setLibraryPagination] = useState<PaginationState>({
+    page: 1,
+    pageSize: LIBRARY_PAGE_SIZE
+  });
+  const [tocPagination, setTocPagination] = useState<PaginationState>({
+    page: 1,
+    pageSize: TOC_PAGE_SIZE
+  });
+  const [diagnosticPagination, setDiagnosticPagination] = useState<PaginationState>({
+    page: 1,
+    pageSize: DIAGNOSTIC_PAGE_SIZE
+  });
   const pollTimerRef = useRef<number | null>(null);
 
   const activeJob = useMemo(
@@ -262,6 +337,22 @@ export function App() {
   }, [documentFilter, preferredDocuments]);
 
   const featuredDocuments = useMemo(() => preferredDocuments.slice(0, 3), [preferredDocuments]);
+  const pagedJobs = useMemo(
+    () => paginateItems(jobs, jobPagination.page, jobPagination.pageSize),
+    [jobPagination.page, jobPagination.pageSize, jobs]
+  );
+  const pagedDocuments = useMemo(
+    () => paginateItems(filteredDocuments, libraryPagination.page, libraryPagination.pageSize),
+    [filteredDocuments, libraryPagination.page, libraryPagination.pageSize]
+  );
+  const pagedTocEntries = useMemo(
+    () => paginateItems(selectedDocument?.toc ?? [], tocPagination.page, tocPagination.pageSize),
+    [selectedDocument?.toc, tocPagination.page, tocPagination.pageSize]
+  );
+  const pagedDiagnostics = useMemo(
+    () => paginateItems(selectedDocument?.diagnostics ?? [], diagnosticPagination.page, diagnosticPagination.pageSize),
+    [diagnosticPagination.page, diagnosticPagination.pageSize, selectedDocument?.diagnostics]
+  );
 
   const activeJobOverview = useMemo(() => {
     if (!activeJob) {
@@ -472,6 +563,63 @@ export function App() {
       setSelectedDocumentId(preferredDocuments[0]?.docId ?? null);
     }
   }, [jobDocuments, preferredDocuments, selectedDocumentId, showInternalArtifacts]);
+
+  useEffect(() => {
+    setLibraryPagination((current) => ({
+      ...current,
+      page: clampPage(current.page, filteredDocuments.length, current.pageSize)
+    }));
+  }, [filteredDocuments.length]);
+
+  useEffect(() => {
+    if (!selectedDocumentId) {
+      return;
+    }
+
+    const selectedIndex = filteredDocuments.findIndex((document) => document.docId === selectedDocumentId);
+    if (selectedIndex === -1) {
+      return;
+    }
+
+    setLibraryPagination((current) => {
+      const nextPage = Math.floor(selectedIndex / current.pageSize) + 1;
+      return nextPage === current.page ? current : { ...current, page: nextPage };
+    });
+  }, [filteredDocuments, selectedDocumentId]);
+
+  useEffect(() => {
+    setJobPagination((current) => ({
+      ...current,
+      page: clampPage(current.page, jobs.length, current.pageSize)
+    }));
+  }, [jobs.length]);
+
+  useEffect(() => {
+    if (!activeJobId) {
+      return;
+    }
+
+    const activeIndex = jobs.findIndex((job) => job.jobId === activeJobId);
+    if (activeIndex === -1) {
+      return;
+    }
+
+    setJobPagination((current) => {
+      const nextPage = Math.floor(activeIndex / current.pageSize) + 1;
+      return nextPage === current.page ? current : { ...current, page: nextPage };
+    });
+  }, [activeJobId, jobs]);
+
+  useEffect(() => {
+    setTocPagination((current) => ({
+      ...current,
+      page: 1
+    }));
+    setDiagnosticPagination((current) => ({
+      ...current,
+      page: 1
+    }));
+  }, [selectedDocumentId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -727,7 +875,7 @@ export function App() {
               <p>{jobs.length} tracked</p>
             </div>
             <div className="job-list recent-job-list">
-              {jobs.map((job) => {
+              {pagedJobs.map((job) => {
                 const completion = calculateJobCompletion(job);
                 const tone = toneForJobState(job.state);
 
@@ -753,6 +901,12 @@ export function App() {
                 );
               })}
             </div>
+            <PaginationControls
+              page={jobPagination.page}
+              pageSize={jobPagination.pageSize}
+              totalItems={jobs.length}
+              onPageChange={(page) => setJobPagination((current) => ({ ...current, page }))}
+            />
           </section>
         </aside>
 
@@ -927,7 +1081,7 @@ export function App() {
               <span>Show internal artifacts and templates</span>
             </label>
             <div className="job-list artifact-list">
-              {filteredDocuments.map((document) => (
+              {pagedDocuments.map((document) => (
                 <button
                   className={`job-card ${selectedDocumentId === document.docId ? "active" : ""}`}
                   key={document.docId}
@@ -953,6 +1107,12 @@ export function App() {
                 </button>
               ))}
             </div>
+            <PaginationControls
+              page={libraryPagination.page}
+              pageSize={libraryPagination.pageSize}
+              totalItems={filteredDocuments.length}
+              onPageChange={(page) => setLibraryPagination((current) => ({ ...current, page }))}
+            />
           </section>
 
           <section className="panel">
@@ -994,12 +1154,18 @@ export function App() {
               <p>{selectedDocument?.toc.length ?? 0} headings</p>
             </div>
             <ul className="toc-list panel-scroll">
-              {(selectedDocument?.toc ?? []).map((entry) => (
+              {pagedTocEntries.map((entry) => (
                 <li key={entry.slug} style={{ paddingLeft: `${(entry.level - 1) * 12}px` }}>
                   <a href={`#${entry.slug}`}>{entry.title}</a>
                 </li>
               ))}
             </ul>
+            <PaginationControls
+              page={tocPagination.page}
+              pageSize={tocPagination.pageSize}
+              totalItems={selectedDocument?.toc.length ?? 0}
+              onPageChange={(page) => setTocPagination((current) => ({ ...current, page }))}
+            />
           </section>
 
           <section className="panel">
@@ -1008,13 +1174,19 @@ export function App() {
               <p>{selectedDocumentMetrics?.diagnostics ?? 0} items</p>
             </div>
             <div className="diagnostic-list panel-scroll">
-              {(selectedDocument?.diagnostics ?? []).map((diagnostic) => (
+              {pagedDiagnostics.map((diagnostic) => (
                 <div className={`diagnostic ${toneForDiagnosticSeverity(diagnostic.severity)}`} key={diagnostic.id}>
                   <strong>{diagnostic.code}</strong>
                   <p>{diagnostic.message}</p>
                 </div>
               ))}
             </div>
+            <PaginationControls
+              page={diagnosticPagination.page}
+              pageSize={diagnosticPagination.pageSize}
+              totalItems={selectedDocument?.diagnostics.length ?? 0}
+              onPageChange={(page) => setDiagnosticPagination((current) => ({ ...current, page }))}
+            />
           </section>
 
           <section className="panel">
