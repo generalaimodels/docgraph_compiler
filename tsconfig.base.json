@@ -1,0 +1,87 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": [
+      "ES2023",
+      "DOM"
+    ],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "useUnknownInCatchVariables": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "types": [
+      "node"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@docgraph/core-types": [
+        "packages/core-types/src/index.ts"
+      ],
+      "@docgraph/core-ir": [
+        "packages/core-ir/src/index.ts"
+      ],
+      "@docgraph/source-sniffer": [
+        "packages/source-sniffer/src/index.ts"
+      ],
+      "@docgraph/security": [
+        "packages/security/src/index.ts"
+      ],
+      "@docgraph/observability": [
+        "packages/observability/src/index.ts"
+      ],
+      "@docgraph/parser-md": [
+        "packages/parser-md/src/index.ts"
+      ],
+      "@docgraph/parser-mdx": [
+        "packages/parser-mdx/src/index.ts"
+      ],
+      "@docgraph/parser-html": [
+        "packages/parser-html/src/index.ts"
+      ],
+      "@docgraph/parser-docx": [
+        "packages/parser-docx/src/index.ts"
+      ],
+      "@docgraph/parser-ipynb": [
+        "packages/parser-ipynb/src/index.ts"
+      ],
+      "@docgraph/parser-rdx": [
+        "packages/parser-rdx/src/index.ts"
+      ],
+      "@docgraph/renderer-html": [
+        "packages/renderer-html/src/index.ts"
+      ],
+      "@docgraph/renderer-markdown": [
+        "packages/renderer-markdown/src/index.ts"
+      ],
+      "@docgraph/renderer-json": [
+        "packages/renderer-json/src/index.ts"
+      ],
+      "@docgraph/projection-navigation": [
+        "packages/projection-navigation/src/index.ts"
+      ],
+      "@docgraph/projection-search": [
+        "packages/projection-search/src/index.ts"
+      ],
+      "@docgraph/api-contracts": [
+        "packages/api-contracts/src/index.ts"
+      ],
+      "@docgraph/queue-contracts": [
+        "packages/queue-contracts/src/index.ts"
+      ],
+      "@docgraph/worker-ingest": [
+        "packages/worker-ingest/src/index.ts"
+      ]
+    }
+  }
+}

@@ -1,0 +1,30 @@
+openapi: "3.1.0"
+info:
+  title: DocGraph Compiler API
+  version: "0.1.0"
+  description: Compiler-style document ingestion and preview API.
+paths:
+  /v1/import/files:
+    post:
+      summary: Import a single file payload
+  /v1/import/repos:
+    post:
+      summary: Import a public GitHub repository
+  /v1/jobs/{jobId}:
+    get:
+      summary: Inspect asynchronous job state
+  /v1/documents/{docId}:
+    get:
+      summary: Retrieve compiled document metadata and artifacts
+  /v1/documents/{docId}/ir:
+    get:
+      summary: Retrieve canonical IR
+  /v1/documents/{docId}/preview:
+    get:
+      summary: Retrieve HTML, Markdown, or JSON preview
+  /v1/graphs/{docId}/links:
+    get:
+      summary: Retrieve outgoing links
+  /v1/graphs/{docId}/backlinks:
+    get:
+      summary: Retrieve incoming links

@@ -1,0 +1,373 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f1ea;
+  --bg-strong: #fdfbf7;
+  --panel: rgba(255, 255, 255, 0.82);
+  --panel-border: rgba(31, 41, 55, 0.12);
+  --text: #17202d;
+  --muted: #5c6b7d;
+  --accent: #dd6b20;
+  --accent-strong: #b45309;
+  --line: rgba(23, 32, 45, 0.08);
+  --shadow: 0 16px 48px rgba(23, 32, 45, 0.08);
+  --radius: 22px;
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(221, 107, 32, 0.12), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(14, 116, 144, 0.12), transparent 24%),
+    var(--bg);
+  color: var(--text);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 26px;
+  background: linear-gradient(145deg, #fff8ef, #f5dfc8);
+  border: 1px solid rgba(180, 83, 9, 0.16);
+  color: var(--accent-strong);
+  font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  box-shadow: var(--shadow);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent-strong);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.76rem;
+}
+
+.topbar h1 {
+  margin: 0;
+  max-width: 980px;
+  font-size: clamp(1.8rem, 3vw, 3rem);
+  line-height: 1.08;
+  font-weight: 650;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) minmax(280px, 320px);
+  gap: 20px;
+  align-items: start;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+  padding: 18px;
+}
+
+.left-rail,
+.right-rail {
+  display: grid;
+  gap: 20px;
+}
+
+.preview-column {
+  min-width: 0;
+}
+
+.preview-panel {
+  min-height: 70vh;
+}
+
+.preview-surface {
+  padding-top: 12px;
+}
+
+.mode-switch {
+  display: inline-grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(23, 32, 45, 0.04);
+}
+
+.mode-switch button,
+.form-stack button {
+  cursor: pointer;
+}
+
+.mode-switch button {
+  border: none;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.mode-switch button.active,
+.form-stack button {
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: white;
+}
+
+.form-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.form-stack label {
+  display: grid;
+  gap: 8px;
+}
+
+.form-stack span,
+.section-heading p,
+.job-card span,
+.job-card small,
+.toc-list,
+.diagnostic p {
+  color: var(--muted);
+}
+
+.form-stack input,
+.form-stack textarea {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  padding: 12px 14px;
+  background: var(--bg-strong);
+}
+
+.form-stack textarea {
+  min-height: 220px;
+  resize: vertical;
+  font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+}
+
+.form-stack button {
+  border: none;
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-weight: 600;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: baseline;
+  margin-bottom: 14px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.section-heading p {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.job-list,
+.diagnostic-list {
+  display: grid;
+  gap: 12px;
+}
+
+.job-card {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  background: var(--bg-strong);
+  display: grid;
+  gap: 6px;
+}
+
+.job-card.active {
+  border-color: rgba(221, 107, 32, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(221, 107, 32, 0.18);
+}
+
+.toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.toc-list a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.diagnostic {
+  border-left: 3px solid var(--line);
+  padding-left: 12px;
+}
+
+.diagnostic.warning {
+  border-left-color: #d97706;
+}
+
+.diagnostic.error {
+  border-left-color: #dc2626;
+}
+
+.error-box {
+  border-radius: 14px;
+  background: rgba(220, 38, 38, 0.08);
+  color: #991b1b;
+  padding: 12px 14px;
+}
+
+.dg-doc {
+  width: min(100%, 880px);
+  margin: 0 auto;
+  background: white;
+  border-radius: 24px;
+  border: 1px solid rgba(23, 32, 45, 0.08);
+  padding: clamp(20px, 4vw, 48px);
+  box-shadow: 0 18px 56px rgba(23, 32, 45, 0.07);
+  line-height: 1.7;
+}
+
+.dg-doc-header {
+  padding-bottom: 20px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid rgba(23, 32, 45, 0.08);
+}
+
+.dg-doc-header h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 2.8rem);
+  line-height: 1.08;
+}
+
+.dg-doc-kicker {
+  margin: 0 0 8px;
+  color: var(--accent-strong);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+.dg-doc h2,
+.dg-doc h3,
+.dg-doc h4,
+.dg-doc h5,
+.dg-doc h6 {
+  margin-top: 2.2em;
+  margin-bottom: 0.7em;
+  scroll-margin-top: 24px;
+}
+
+.dg-doc p,
+.dg-doc ul,
+.dg-doc ol,
+.dg-doc table,
+.dg-doc blockquote,
+.dg-doc pre,
+.dg-doc .dg-callout,
+.dg-doc .dg-notebook-cell {
+  margin: 1rem 0 1.2rem;
+}
+
+.dg-doc pre,
+.dg-doc code {
+  font-family: "IBM Plex Mono", "Cascadia Mono", monospace;
+}
+
+.dg-code-block,
+.dg-math-block,
+.dg-notebook-text,
+.dg-notebook-json,
+.dg-notebook-error {
+  overflow: auto;
+  border-radius: 18px;
+  background: #111827;
+  color: #f9fafb;
+  padding: 16px;
+}
+
+.dg-callout {
+  border-radius: 18px;
+  border: 1px solid rgba(14, 116, 144, 0.18);
+  background: rgba(14, 116, 144, 0.07);
+  padding: 16px 18px;
+}
+
+.dg-notebook-cell {
+  border-radius: 18px;
+  border: 1px solid rgba(23, 32, 45, 0.08);
+  background: #fafafa;
+  padding: 14px;
+}
+
+.dg-notebook-cell-header {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 10px;
+}
+
+.dg-media img,
+.dg-notebook-image,
+.dg-doc img {
+  max-width: 100%;
+  border-radius: 16px;
+}
+
+.dg-doc table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dg-doc th,
+.dg-doc td {
+  border-bottom: 1px solid rgba(23, 32, 45, 0.08);
+  padding: 10px 12px;
+  text-align: left;
+}
+
+@media (max-width: 1180px) {
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}

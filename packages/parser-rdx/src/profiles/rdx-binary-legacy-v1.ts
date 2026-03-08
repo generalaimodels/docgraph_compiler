@@ -1,0 +1,28 @@
+import type { ParseContext, ParseResult } from "@docgraph/core-ir";
+import { IRBuilder, makeNodeIdAuto, repoProvenanceFromSource } from "@docgraph/core-ir";
+
+export class RdxBinaryLegacyV1Parser {
+  async parse(ctx: ParseContext, profile: string): Promise<ParseResult> {
+    const builder = new IRBuilder();
+    const repo = repoProvenanceFromSource(ctx.source);
+    builder.setProvenance({
+      sourceFormat: "rdx-custom",
+      parser: {
+        name: "parser-rdx",
+        version: "0.1.0",
+        profile
+      },
+      parsedAt: new Date().toISOString(),
+      ...(repo ? { repo } : {})
+    });
+    builder.addBlock({
+      kind: "raw-embed",
+      nodeId: makeNodeIdAuto(),
+      originalFormat: profile,
+      raw: "",
+      rawBinary: Buffer.from(ctx.source.bytes).toString("base64"),
+      reason: "Legacy binary RDX preserved for a future high-fidelity adapter"
+    });
+    return { ir: builder.build() };
+  }
+}

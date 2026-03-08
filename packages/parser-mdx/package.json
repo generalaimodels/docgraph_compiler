@@ -1,0 +1,24 @@
+{
+  "name": "@docgraph/parser-mdx",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@docgraph/core-ir": "file:../core-ir",
+    "@docgraph/parser-md": "file:../parser-md",
+    "gray-matter": "latest",
+    "remark-frontmatter": "latest",
+    "remark-gfm": "latest",
+    "remark-math": "latest",
+    "remark-mdx": "latest",
+    "remark-parse": "latest",
+    "unified": "latest"
+  }
+}

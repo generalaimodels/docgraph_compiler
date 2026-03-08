@@ -1,0 +1,68 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/core-types"
+    },
+    {
+      "path": "./packages/core-ir"
+    },
+    {
+      "path": "./packages/source-sniffer"
+    },
+    {
+      "path": "./packages/security"
+    },
+    {
+      "path": "./packages/observability"
+    },
+    {
+      "path": "./packages/parser-md"
+    },
+    {
+      "path": "./packages/parser-mdx"
+    },
+    {
+      "path": "./packages/parser-html"
+    },
+    {
+      "path": "./packages/parser-docx"
+    },
+    {
+      "path": "./packages/parser-ipynb"
+    },
+    {
+      "path": "./packages/parser-rdx"
+    },
+    {
+      "path": "./packages/renderer-html"
+    },
+    {
+      "path": "./packages/renderer-markdown"
+    },
+    {
+      "path": "./packages/renderer-json"
+    },
+    {
+      "path": "./packages/projection-navigation"
+    },
+    {
+      "path": "./packages/projection-search"
+    },
+    {
+      "path": "./packages/api-contracts"
+    },
+    {
+      "path": "./packages/queue-contracts"
+    },
+    {
+      "path": "./packages/worker-ingest"
+    },
+    {
+      "path": "./apps/api"
+    },
+    {
+      "path": "./apps/admin-console"
+    }
+  ]
+}

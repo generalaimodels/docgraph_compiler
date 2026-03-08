@@ -1,0 +1,61 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    {
+      "path": "../api-contracts"
+    },
+    {
+      "path": "../core-ir"
+    },
+    {
+      "path": "../core-types"
+    },
+    {
+      "path": "../observability"
+    },
+    {
+      "path": "../parser-docx"
+    },
+    {
+      "path": "../parser-html"
+    },
+    {
+      "path": "../parser-ipynb"
+    },
+    {
+      "path": "../parser-md"
+    },
+    {
+      "path": "../parser-mdx"
+    },
+    {
+      "path": "../parser-rdx"
+    },
+    {
+      "path": "../projection-navigation"
+    },
+    {
+      "path": "../projection-search"
+    },
+    {
+      "path": "../renderer-html"
+    },
+    {
+      "path": "../renderer-json"
+    },
+    {
+      "path": "../renderer-markdown"
+    },
+    {
+      "path": "../security"
+    },
+    {
+      "path": "../source-sniffer"
+    }
+  ]
+}

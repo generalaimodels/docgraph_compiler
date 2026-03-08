@@ -1,0 +1,32 @@
+{
+  "name": "@docgraph/worker-ingest",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@docgraph/api-contracts": "file:../api-contracts",
+    "@docgraph/core-ir": "file:../core-ir",
+    "@docgraph/core-types": "file:../core-types",
+    "@docgraph/observability": "file:../observability",
+    "@docgraph/parser-docx": "file:../parser-docx",
+    "@docgraph/parser-html": "file:../parser-html",
+    "@docgraph/parser-ipynb": "file:../parser-ipynb",
+    "@docgraph/parser-md": "file:../parser-md",
+    "@docgraph/parser-mdx": "file:../parser-mdx",
+    "@docgraph/parser-rdx": "file:../parser-rdx",
+    "@docgraph/projection-navigation": "file:../projection-navigation",
+    "@docgraph/projection-search": "file:../projection-search",
+    "@docgraph/renderer-html": "file:../renderer-html",
+    "@docgraph/renderer-json": "file:../renderer-json",
+    "@docgraph/renderer-markdown": "file:../renderer-markdown",
+    "@docgraph/security": "file:../security",
+    "@docgraph/source-sniffer": "file:../source-sniffer"
+  }
+}

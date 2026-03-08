@@ -1,0 +1,31 @@
+{
+  "name": "docgraph-compiler",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "tsc -b && npm --workspace @docgraph/admin-console run build",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "dev:api": "npm --workspace @docgraph/api run dev",
+    "dev:web": "npm --workspace @docgraph/admin-console run dev"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react-swc": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "vite-tsconfig-paths": "latest",
+    "vitest": "latest"
+  }
+}
