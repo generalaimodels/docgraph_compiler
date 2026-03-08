@@ -34,6 +34,9 @@
       "path": "../parser-mdx"
     },
     {
+      "path": "../parser-rst"
+    },
+    {
       "path": "../parser-rdx"
     },
     {

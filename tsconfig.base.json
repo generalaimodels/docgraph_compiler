@@ -52,6 +52,9 @@
       "@docgraph/parser-docx": [
         "packages/parser-docx/src/index.ts"
       ],
+      "@docgraph/parser-rst": [
+        "packages/parser-rst/src/index.ts"
+      ],
       "@docgraph/parser-ipynb": [
         "packages/parser-ipynb/src/index.ts"
       ],

@@ -29,6 +29,9 @@
       "path": "./packages/parser-docx"
     },
     {
+      "path": "./packages/parser-rst"
+    },
+    {
       "path": "./packages/parser-ipynb"
     },
     {

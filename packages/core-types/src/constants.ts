@@ -2,6 +2,7 @@ export const SUPPORTED_EXTENSIONS = [
   ".rdx",
   ".mdx",
   ".md",
+  ".rst",
   ".docx",
   ".ipynb"
 ] as const;

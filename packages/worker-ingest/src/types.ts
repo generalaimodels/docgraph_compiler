@@ -23,7 +23,7 @@ export interface CompiledDocumentRecord {
 
 export interface CompilerJobRecord extends JobSummary {
   source: {
-    kind: "file" | "github";
+    kind: "file" | "github" | "local";
     label: string;
   };
   idempotencyKey?: string;

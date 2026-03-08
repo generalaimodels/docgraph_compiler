@@ -3,6 +3,7 @@ import type { FileId, RepoId, RevisionId } from "./identifiers.js";
 export type SourceFormat =
   | "md"
   | "mdx"
+  | "rst"
   | "ipynb"
   | "docx"
   | "html"

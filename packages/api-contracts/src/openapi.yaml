@@ -10,6 +10,9 @@ paths:
   /v1/import/repos:
     post:
       summary: Import a public GitHub repository
+  /v1/import/local-repo:
+    post:
+      summary: Import a local repository path from the server filesystem
   /v1/jobs/{jobId}:
     get:
       summary: Inspect asynchronous job state

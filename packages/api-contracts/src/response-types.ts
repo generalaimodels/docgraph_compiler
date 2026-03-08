@@ -9,7 +9,7 @@ export interface JobSummary {
   createdAt: string;
   updatedAt: string;
   source?: {
-    kind: "file" | "github";
+    kind: "file" | "github" | "local";
     label: string;
   };
   progress: {

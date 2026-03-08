@@ -20,6 +20,7 @@
     "@docgraph/parser-ipynb": "file:../parser-ipynb",
     "@docgraph/parser-md": "file:../parser-md",
     "@docgraph/parser-mdx": "file:../parser-mdx",
+    "@docgraph/parser-rst": "file:../parser-rst",
     "@docgraph/parser-rdx": "file:../parser-rdx",
     "@docgraph/projection-navigation": "file:../projection-navigation",
     "@docgraph/projection-search": "file:../projection-search",

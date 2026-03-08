@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
+import { extname, posix, relative, resolve } from "node:path";
 import type { ImportFileRequest, ImportRepoRequest } from "@docgraph/api-contracts";
+import type { ImportLocalRepoRequest } from "@docgraph/api-contracts";
 import { isTerminalJobState } from "@docgraph/api-contracts";
 import { attachDiagnostics, replaceLinkGraph } from "@docgraph/core-ir";
 import { AdapterRegistry, type ParseContext, type SourceAdapter, type SourceDescriptor } from "@docgraph/core-ir";
@@ -10,6 +13,7 @@ import { HtmlAdapter } from "@docgraph/parser-html";
 import { IpynbAdapter } from "@docgraph/parser-ipynb";
 import { MarkdownAdapter } from "@docgraph/parser-md";
 import { MdxAdapter } from "@docgraph/parser-mdx";
+import { RstAdapter } from "@docgraph/parser-rst";
 import { RdxAdapter } from "@docgraph/parser-rdx";
 import { buildBacklinkIndex, buildTableOfContents } from "@docgraph/projection-navigation";
 import { buildSearchDocument } from "@docgraph/projection-search";
@@ -40,11 +44,13 @@ async function runWithConcurrency<TItem>(
   concurrency: number,
   worker: (item: TItem) => Promise<void>
 ): Promise<void> {
-  const queue = [...items];
-  const workers = Array.from({ length: Math.min(concurrency, queue.length || 1) }, async () => {
-    while (queue.length > 0) {
-      const next = queue.shift();
-      if (!next) {
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length || 1) }, async () => {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      const next = items[currentIndex];
+      if (next === undefined) {
         break;
       }
 
@@ -56,7 +62,35 @@ async function runWithConcurrency<TItem>(
 }
 
 function createDefaultAdapters(): SourceAdapter[] {
-  return [new MarkdownAdapter(), new MdxAdapter(), new DocxAdapter(), new IpynbAdapter(), new RdxAdapter(), new HtmlAdapter()];
+  return [new MarkdownAdapter(), new MdxAdapter(), new RstAdapter(), new DocxAdapter(), new IpynbAdapter(), new RdxAdapter(), new HtmlAdapter()];
+}
+
+async function collectLocalFiles(
+  rootPath: string,
+  currentPath: string,
+  includeExtensions: ReadonlySet<string>,
+  recursive: boolean
+): Promise<string[]> {
+  const entries = await readdir(currentPath, { withFileTypes: true });
+  const results: string[] = [];
+
+  for (const entry of entries) {
+    const absolutePath = resolve(currentPath, entry.name);
+    if (entry.isDirectory()) {
+      if (recursive) {
+        results.push(...(await collectLocalFiles(rootPath, absolutePath, includeExtensions, recursive)));
+      }
+      continue;
+    }
+
+    const extension = extname(entry.name).toLowerCase();
+    if (includeExtensions.has(extension)) {
+      const relativePath = relative(rootPath, absolutePath).replaceAll("\\", "/");
+      results.push(relativePath);
+    }
+  }
+
+  return results.sort((left, right) => left.localeCompare(right));
 }
 
 export class DocGraphCompiler {
@@ -142,12 +176,45 @@ export class DocGraphCompiler {
     return this.getJobOrThrow(job.jobId);
   }
 
+  scheduleLocalRepoImport(request: ImportLocalRepoRequest, idempotencyKey?: string): CompilerJobRecord {
+    if (idempotencyKey) {
+      const existing = this.store.getJobByIdempotencyKey(idempotencyKey);
+      if (existing) {
+        return existing;
+      }
+    }
+
+    const target = request.source.path ? `${request.source.rootPath}:${request.source.path}` : request.source.rootPath;
+    const job = this.store.createJob(
+      {
+        kind: "local",
+        label: target
+      },
+      idempotencyKey
+    );
+
+    queueMicrotask(() => {
+      void this.runLocalRepoImport(job.jobId, request);
+    });
+
+    return this.getJobOrThrow(job.jobId);
+  }
+
   getJob(jobId: string): CompilerJobRecord | null {
     return this.store.getJob(jobId);
   }
 
   getDocument(docId: string): CompiledDocumentRecord | null {
     return this.store.getDocument(docId);
+  }
+
+  getJobDocuments(jobId: string): CompiledDocumentRecord[] {
+    const job = this.store.getJob(jobId);
+    if (!job) {
+      return [];
+    }
+
+    return this.store.getDocuments(job.documentIds);
   }
 
   getOutgoingLinks(docId: string): LinkRef[] {
@@ -315,12 +382,96 @@ export class DocGraphCompiler {
     }
   }
 
+  private async runLocalRepoImport(jobId: string, request: ImportLocalRepoRequest): Promise<void> {
+    try {
+      this.store.updateJob(jobId, { state: "fetching" });
+      const rootPath = resolve(request.source.rootPath);
+      const importRoot = request.source.path ? resolve(rootPath, request.source.path) : rootPath;
+      const includeExtensions = new Set(request.options?.includeExtensions ?? [...SUPPORTED_EXTENSIONS]);
+      const files = await collectLocalFiles(rootPath, importRoot, includeExtensions, request.options?.recursive !== false);
+      const repoKey = `local:${rootPath}`;
+
+      this.store.updateJob(jobId, {
+        state: "parsing",
+        progress: {
+          totalFiles: files.length,
+          completedFiles: 0,
+          failedFiles: 0
+        }
+      });
+
+      const resolveRelativeSource = async (fromPath: string, relPath: string): Promise<SourceDescriptor | null> => {
+        try {
+          const resolvedPath = resolveRelativeRepoPath(fromPath, relPath);
+          const absolutePath = resolve(rootPath, resolvedPath);
+          const bytes = new Uint8Array(await readFile(absolutePath));
+          return createSourceDescriptor(resolvedPath, bytes);
+        } catch {
+          return null;
+        }
+      };
+
+      await runWithConcurrency(files, 6, async (relativePath) => {
+        try {
+          const absolutePath = resolve(rootPath, relativePath);
+          const bytes = new Uint8Array(await readFile(absolutePath));
+          const document = await this.compileDocument({
+            path: relativePath,
+            bytes,
+            repoKey,
+            relativeResolver: resolveRelativeSource
+          });
+          this.store.attachDocument(jobId, document.docId);
+          const current = this.getJobOrThrow(jobId);
+          this.store.updateJob(jobId, {
+            progress: {
+              ...current.progress,
+              completedFiles: current.progress.completedFiles + 1
+            }
+          });
+        } catch (error) {
+          const current = this.getJobOrThrow(jobId);
+          this.logger.warn({ message: "Local repository file compilation failed", path: relativePath, error: String(error) });
+          this.store.updateJob(jobId, {
+            progress: {
+              ...current.progress,
+              failedFiles: current.progress.failedFiles + 1
+            }
+          });
+        }
+      });
+
+      if (request.options?.followLocalLinks !== false) {
+        this.store.updateJob(jobId, { state: "resolving" });
+        await this.resolveRepositoryLinks(repoKey, this.getJobOrThrow(jobId).documentIds);
+      }
+
+      const finalJob = this.getJobOrThrow(jobId);
+      const partialSuccess = finalJob.progress.failedFiles > 0 && finalJob.progress.completedFiles > 0;
+      this.store.updateJob(jobId, {
+        state: partialSuccess ? "partial_success" : "completed"
+      });
+      this.metrics.increment("docgraph.import.local.completed", { partial: partialSuccess });
+    } catch (error) {
+      this.logger.error({ message: "Local repository import failed", error: String(error), jobId });
+      this.store.updateJob(jobId, {
+        state: "failed",
+        error: {
+          code: "LOCAL_REPO_IMPORT_FAILED",
+          message: String(error)
+        }
+      });
+    }
+  }
+
   private async compileDocument(input: {
     path: string;
     bytes: Uint8Array;
     repoKey?: string;
     repoContext?: SourceDescriptor["repoContext"];
+    relativeResolver?: (fromPath: string, relPath: string) => Promise<SourceDescriptor | null>;
   }): Promise<CompiledDocumentRecord> {
+    const startedAt = performance.now();
     assertWithinFileSizeLimit(input.bytes);
     const source = createSourceDescriptor(input.path, input.bytes, input.repoContext);
     const resolution = await this.registry.resolve(source);
@@ -330,7 +481,7 @@ export class DocGraphCompiler {
 
     const parseContext: ParseContext = {
       source,
-      resolveRelativePath: async () => null,
+      resolveRelativePath: async (relPath) => (input.relativeResolver ? input.relativeResolver(source.path, relPath) : null),
       emitDiagnostic: (diagnostic) => {
         extraDiagnostics.push({
           ...diagnostic,
@@ -375,6 +526,9 @@ export class DocGraphCompiler {
     };
 
     this.store.saveDocument(record);
+    this.metrics.histogram("docgraph.compile.duration_ms", performance.now() - startedAt, {
+      format
+    });
     return record;
   }
 

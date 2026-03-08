@@ -15,6 +15,18 @@ export interface ImportRepoRequest {
   };
 }
 
+export interface ImportLocalRepoRequest {
+  source: {
+    rootPath: string;
+    path?: string;
+  };
+  options?: {
+    recursive?: boolean;
+    includeExtensions?: SupportedExtension[];
+    followLocalLinks?: boolean;
+  };
+}
+
 export interface ImportFileRequest {
   path: string;
   contentBase64: string;

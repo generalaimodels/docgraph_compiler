@@ -1,11 +1,137 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import type { DocumentResponse, JobSummary } from "@docgraph/api-contracts";
+import type { DocumentResponse, DocumentSummary, JobSummary } from "@docgraph/api-contracts";
 
-type Mode = "file" | "repo";
+type Mode = "file" | "local" | "repo";
+type ReaderView = "rendered" | "markdown" | "ir";
+
+type CounterRecord = {
+  key: string;
+  value: number;
+};
+
+type HistogramRecord = {
+  key: string;
+  count: number;
+  sum: number;
+};
+
+type HealthResponse = {
+  ok: boolean;
+  metrics: {
+    counters: CounterRecord[];
+    histograms: HistogramRecord[];
+  };
+};
+
+const compactNumberFormatter = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumFractionDigits: 1
+});
+
+const integerFormatter = new Intl.NumberFormat("en-US");
 
 function isTerminal(state: JobSummary["state"]): boolean {
   return state === "completed" || state === "failed" || state === "partial_success";
+}
+
+function formatStateLabel(state: JobSummary["state"]): string {
+  return state.replaceAll("_", " ");
+}
+
+function toneForJobState(state: JobSummary["state"]): "neutral" | "success" | "warning" | "danger" {
+  if (state === "completed") {
+    return "success";
+  }
+
+  if (state === "failed") {
+    return "danger";
+  }
+
+  if (state === "partial_success") {
+    return "warning";
+  }
+
+  return "neutral";
+}
+
+function toneForDiagnosticSeverity(severity: "info" | "warning" | "error"): "neutral" | "warning" | "danger" {
+  if (severity === "error") {
+    return "danger";
+  }
+
+  if (severity === "warning") {
+    return "warning";
+  }
+
+  return "neutral";
+}
+
+function sourceKindLabel(kind?: NonNullable<JobSummary["source"]>["kind"]): string {
+  switch (kind) {
+    case "file":
+      return "Single file";
+    case "local":
+      return "Local tree";
+    case "github":
+      return "GitHub repo";
+    default:
+      return "Source";
+  }
+}
+
+function formatLatency(milliseconds: number | null): string {
+  if (milliseconds === null) {
+    return "No samples";
+  }
+
+  if (milliseconds < 1) {
+    return `${milliseconds.toFixed(2)} ms`;
+  }
+
+  if (milliseconds < 1000) {
+    return `${milliseconds.toFixed(1)} ms`;
+  }
+
+  return `${(milliseconds / 1000).toFixed(2)} s`;
+}
+
+function calculateJobCompletion(job: JobSummary): number {
+  const processed = job.progress.completedFiles + job.progress.failedFiles;
+  return job.progress.totalFiles === 0 ? 0 : Math.round((processed / job.progress.totalFiles) * 100);
+}
+
+function sumCounters(records: readonly CounterRecord[], prefix: string): number {
+  return records.reduce((total, record) => total + (record.key.startsWith(prefix) ? record.value : 0), 0);
+}
+
+function meanHistogram(records: readonly HistogramRecord[], prefix: string): number | null {
+  let count = 0;
+  let sum = 0;
+
+  for (const record of records) {
+    if (!record.key.startsWith(prefix)) {
+      continue;
+    }
+
+    count += record.count;
+    sum += record.sum;
+  }
+
+  return count === 0 ? null : sum / count;
+}
+
+function countWords(text: string): number {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
+    return 0;
+  }
+
+  return trimmed.split(/\s+/u).length;
+}
+
+function encodeTextToBase64(value: string): string {
+  return btoa(unescape(encodeURIComponent(value)));
 }
 
 async function encodeToBase64(file: File): Promise<string> {
@@ -19,6 +145,7 @@ async function encodeToBase64(file: File): Promise<string> {
 
 export function App() {
   const [mode, setMode] = useState<Mode>("file");
+  const [readerView, setReaderView] = useState<ReaderView>("rendered");
   const [sourceText, setSourceText] = useState<string>("# Start here\n\nDocGraph Compiler is live.");
   const [filePath, setFilePath] = useState<string>("notes.md");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -26,10 +153,15 @@ export function App() {
   const [repoName, setRepoName] = useState<string>("pytorch");
   const [repoRef, setRepoRef] = useState<string>("main");
   const [repoPath, setRepoPath] = useState<string>("docs");
+  const [localRepoRoot, setLocalRepoRoot] = useState<string>("C:\\Users\\heman\\Desktop\\code\\Docs_conversion\\_tmp_pytorch");
+  const [localRepoPath, setLocalRepoPath] = useState<string>("docs/source");
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<DocumentResponse | null>(null);
+  const [jobDocuments, setJobDocuments] = useState<DocumentSummary[]>([]);
+  const [documentFilter, setDocumentFilter] = useState<string>("");
+  const [platformMetrics, setPlatformMetrics] = useState<HealthResponse["metrics"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pollTimerRef = useRef<number | null>(null);
 
@@ -38,37 +170,137 @@ export function App() {
     [activeJobId, jobs]
   );
 
+  const activeDocumentSummary = useMemo(
+    () => jobDocuments.find((document) => document.docId === selectedDocumentId) ?? null,
+    [jobDocuments, selectedDocumentId]
+  );
+
+  const filteredDocuments = useMemo(() => {
+    const normalizedQuery = documentFilter.trim().toLowerCase();
+    const documents = [...jobDocuments].sort((left, right) => left.path.localeCompare(right.path));
+
+    if (normalizedQuery.length === 0) {
+      return documents;
+    }
+
+    return documents.filter((document) => {
+      const haystack = `${document.title ?? ""} ${document.path} ${document.format}`.toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [documentFilter, jobDocuments]);
+
+  const activeJobOverview = useMemo(() => {
+    if (!activeJob) {
+      return null;
+    }
+
+    const processed = activeJob.progress.completedFiles + activeJob.progress.failedFiles;
+
+    return {
+      completion: calculateJobCompletion(activeJob),
+      processed,
+      totalFiles: activeJob.progress.totalFiles,
+      completedFiles: activeJob.progress.completedFiles,
+      failedFiles: activeJob.progress.failedFiles
+    };
+  }, [activeJob]);
+
+  const selectedDocumentMetrics = useMemo(() => {
+    if (!selectedDocument) {
+      return null;
+    }
+
+    const resolvedLinks = selectedDocument.links.filter((link) => link.resolved).length;
+    const totalLinks = selectedDocument.links.length;
+    const wordCount = countWords(selectedDocument.searchProjection.body);
+    const headings = selectedDocument.searchProjection.headings.length;
+
+    return {
+      fidelityTier: selectedDocument.ir.fidelity.tier,
+      wordCount,
+      headings,
+      blocks: selectedDocument.ir.blocks.length,
+      diagnostics: selectedDocument.diagnostics.length,
+      warnings: selectedDocument.ir.fidelity.warningCount,
+      errors: selectedDocument.ir.fidelity.errorCount,
+      rawEmbeds: selectedDocument.ir.fidelity.rawEmbedCount,
+      unresolvedLinks: selectedDocument.ir.fidelity.unresolvedLinkCount,
+      outgoingLinks: totalLinks,
+      backlinks: selectedDocument.backlinks.length,
+      resolvedLinks,
+      graphIntegrity: totalLinks === 0 ? 100 : Math.round((resolvedLinks / totalLinks) * 100)
+    };
+  }, [selectedDocument]);
+
+  const libraryOverview = useMemo(() => {
+    return {
+      documents: jobDocuments.length,
+      diagnostics: jobDocuments.reduce((total, document) => total + document.diagnostics.length, 0)
+    };
+  }, [jobDocuments]);
+
+  const platformOverview = useMemo(() => {
+    if (!platformMetrics) {
+      return null;
+    }
+
+    return {
+      averageCompileMs: meanHistogram(platformMetrics.histograms, "docgraph.compile.duration_ms"),
+      fileImports: sumCounters(platformMetrics.counters, "docgraph.import.file.completed"),
+      repoImports: sumCounters(platformMetrics.counters, "docgraph.import.repo.completed"),
+      localImports: sumCounters(platformMetrics.counters, "docgraph.import.local.completed")
+    };
+  }, [platformMetrics]);
+
+  function activateJob(jobId: string): void {
+    setActiveJobId(jobId);
+    setSelectedDocumentId(null);
+    setSelectedDocument(null);
+    setJobDocuments([]);
+    setReaderView("rendered");
+  }
+
   useEffect(() => {
     if (!activeJobId) {
       return;
     }
 
+    let cancelled = false;
+
+    const pollJob = async () => {
+      try {
+        const response = await fetch(`/v1/jobs/${activeJobId}`);
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const nextJob = (await response.json()) as JobSummary;
+        if (cancelled) {
+          return;
+        }
+
+        setJobs((current) => [nextJob, ...current.filter((job) => job.jobId !== nextJob.jobId)]);
+
+        if (isTerminal(nextJob.state) && pollTimerRef.current) {
+          window.clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+      } catch {
+        return;
+      }
+    };
+
     if (pollTimerRef.current) {
       window.clearInterval(pollTimerRef.current);
     }
 
-    pollTimerRef.current = window.setInterval(async () => {
-      const response = await fetch(`/v1/jobs/${activeJobId}`);
-      if (!response.ok) {
-        return;
-      }
-
-      const nextJob = (await response.json()) as JobSummary;
-      setJobs((current) => [nextJob, ...current.filter((job) => job.jobId !== nextJob.jobId)]);
-
-      if (isTerminal(nextJob.state)) {
-        if (pollTimerRef.current) {
-          window.clearInterval(pollTimerRef.current);
-          pollTimerRef.current = null;
-        }
-
-        if (nextJob.documentIds[0]) {
-          setSelectedDocumentId((current) => current ?? nextJob.documentIds[0] ?? null);
-        }
-      }
+    void pollJob();
+    pollTimerRef.current = window.setInterval(() => {
+      void pollJob();
     }, 1000);
 
     return () => {
+      cancelled = true;
       if (pollTimerRef.current) {
         window.clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
@@ -78,18 +310,103 @@ export function App() {
 
   useEffect(() => {
     if (!selectedDocumentId) {
+      setSelectedDocument(null);
       return;
     }
 
+    let cancelled = false;
+
     void (async () => {
-      const response = await fetch(`/v1/documents/${selectedDocumentId}`);
-      if (!response.ok) {
+      try {
+        const response = await fetch(`/v1/documents/${selectedDocumentId}`);
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const document = (await response.json()) as DocumentResponse;
+        if (!cancelled) {
+          setSelectedDocument(document);
+        }
+      } catch {
         return;
       }
-      const document = (await response.json()) as DocumentResponse;
-      setSelectedDocument(document);
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedDocumentId]);
+
+  useEffect(() => {
+    if (!activeJobId) {
+      setJobDocuments([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const response = await fetch(`/v1/jobs/${activeJobId}/documents`);
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const payload = (await response.json()) as { items: DocumentSummary[] };
+        if (!cancelled) {
+          setJobDocuments(payload.items);
+        }
+      } catch {
+        return;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeJobId, jobs]);
+
+  useEffect(() => {
+    if (jobDocuments.length === 0) {
+      setSelectedDocumentId(null);
+      setSelectedDocument(null);
+      return;
+    }
+
+    if (!selectedDocumentId || !jobDocuments.some((document) => document.docId === selectedDocumentId)) {
+      setSelectedDocumentId(jobDocuments[0]?.docId ?? null);
+    }
+  }, [jobDocuments, selectedDocumentId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadMetrics = async () => {
+      try {
+        const response = await fetch("/v1/health");
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const health = (await response.json()) as HealthResponse;
+        if (!cancelled) {
+          setPlatformMetrics(health.metrics);
+        }
+      } catch {
+        return;
+      }
+    };
+
+    void loadMetrics();
+    const timerId = window.setInterval(() => {
+      void loadMetrics();
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timerId);
+    };
+  }, []);
 
   async function handleFileSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -101,10 +418,7 @@ export function App() {
         throw new Error("A repository-relative path is required.");
       }
 
-      const contentBase64 = selectedFile
-        ? await encodeToBase64(selectedFile)
-        : btoa(unescape(encodeURIComponent(sourceText)));
-
+      const contentBase64 = selectedFile ? await encodeToBase64(selectedFile) : encodeTextToBase64(sourceText);
       const response = await fetch("/v1/import/files", {
         method: "POST",
         headers: {
@@ -123,7 +437,7 @@ export function App() {
 
       const job = (await response.json()) as JobSummary;
       setJobs((current) => [job, ...current.filter((entry) => entry.jobId !== job.jobId)]);
-      setActiveJobId(job.jobId);
+      activateJob(job.jobId);
     } catch (caughtError) {
       setError(String(caughtError));
     }
@@ -157,9 +471,41 @@ export function App() {
 
       const job = (await response.json()) as JobSummary;
       setJobs((current) => [job, ...current.filter((entry) => entry.jobId !== job.jobId)]);
-      setActiveJobId(job.jobId);
-      setSelectedDocumentId(null);
-      setSelectedDocument(null);
+      activateJob(job.jobId);
+    } catch (caughtError) {
+      setError(String(caughtError));
+    }
+  }
+
+  async function handleLocalRepoSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+
+    try {
+      const response = await fetch("/v1/import/local-repo", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": crypto.randomUUID()
+        },
+        body: JSON.stringify({
+          source: {
+            rootPath: localRepoRoot,
+            path: localRepoPath || undefined
+          },
+          options: {
+            followLocalLinks: true
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const job = (await response.json()) as JobSummary;
+      setJobs((current) => [job, ...current.filter((entry) => entry.jobId !== job.jobId)]);
+      activateJob(job.jobId);
     } catch (caughtError) {
       setError(String(caughtError));
     }
@@ -167,20 +513,51 @@ export function App() {
 
   return (
     <div className="app-shell">
+      <div className="ambient ambient-left" />
+      <div className="ambient ambient-right" />
+
       <header className="topbar">
         <div className="mark">DG//</div>
-        <div>
+        <div className="masthead-copy">
           <p className="eyebrow">DocGraph Compiler</p>
-          <h1>Compiler-grade documentation ingestion with a preview surface tuned for readable technical docs.</h1>
+          <h1>Graph-native technical reading for repositories that are too large for ordinary docs tooling.</h1>
+          <p className="lede">
+            Import PyTorch-scale sources, normalize them into a canonical IR, and inspect rendered output, markdown export, and compiler state from one reader.
+          </p>
+        </div>
+        <div className="masthead-metrics">
+          <div className="hero-chip">
+            <span>Artifacts</span>
+            <strong>{integerFormatter.format(libraryOverview.documents)}</strong>
+          </div>
+          <div className="hero-chip">
+            <span>Avg compile</span>
+            <strong>{formatLatency(platformOverview?.averageCompileMs ?? null)}</strong>
+          </div>
+          <div className="hero-chip">
+            <span>Active source</span>
+            <strong>{sourceKindLabel(activeJob?.source?.kind)}</strong>
+          </div>
         </div>
       </header>
 
       <main className="workspace-grid">
         <aside className="left-rail">
           <section className="panel">
+            <div className="section-heading">
+              <h2>Ingest</h2>
+              <p>Compiler entrypoints</p>
+            </div>
+            <p className="supporting-copy">
+              Keep the import surface narrow and deterministic: single file payloads, local repository trees, or a remote GitHub repository snapshot.
+            </p>
+
             <div className="mode-switch">
               <button className={mode === "file" ? "active" : ""} onClick={() => setMode("file")} type="button">
                 File
+              </button>
+              <button className={mode === "local" ? "active" : ""} onClick={() => setMode("local")} type="button">
+                Local
               </button>
               <button className={mode === "repo" ? "active" : ""} onClick={() => setMode("repo")} type="button">
                 GitHub
@@ -211,6 +588,18 @@ export function App() {
                   <textarea value={sourceText} onChange={(event) => setSourceText(event.target.value)} rows={12} />
                 </label>
                 <button type="submit">Compile source</button>
+              </form>
+            ) : mode === "local" ? (
+              <form onSubmit={handleLocalRepoSubmit} className="form-stack">
+                <label>
+                  <span>Repository root</span>
+                  <input value={localRepoRoot} onChange={(event) => setLocalRepoRoot(event.target.value)} />
+                </label>
+                <label>
+                  <span>Import path</span>
+                  <input value={localRepoPath} onChange={(event) => setLocalRepoPath(event.target.value)} />
+                </label>
+                <button type="submit">Import local docs tree</button>
               </form>
             ) : (
               <form onSubmit={handleRepoSubmit} className="form-stack">
@@ -243,57 +632,152 @@ export function App() {
               <p>{jobs.length} tracked</p>
             </div>
             <div className="job-list">
-              {jobs.map((job) => (
-                <button
-                  className={`job-card ${activeJobId === job.jobId ? "active" : ""}`}
-                  key={job.jobId}
-                  onClick={() => setActiveJobId(job.jobId)}
-                  type="button"
-                >
-                  <strong>{job.source?.label ?? job.jobId}</strong>
-                  <span>{job.state}</span>
-                  <small>
-                    {job.progress.completedFiles}/{job.progress.totalFiles} compiled · {job.progress.failedFiles} failed
-                  </small>
-                </button>
-              ))}
+              {jobs.map((job) => {
+                const completion = calculateJobCompletion(job);
+                const tone = toneForJobState(job.state);
+
+                return (
+                  <button
+                    className={`job-card ${activeJobId === job.jobId ? "active" : ""}`}
+                    key={job.jobId}
+                    onClick={() => activateJob(job.jobId)}
+                    type="button"
+                  >
+                    <div className="job-card-header">
+                      <strong>{job.source?.label ?? job.jobId}</strong>
+                      <span className={`status-pill ${tone}`}>{formatStateLabel(job.state)}</span>
+                    </div>
+                    <span>{sourceKindLabel(job.source?.kind)}</span>
+                    <div className="progress-track" aria-hidden="true">
+                      <span style={{ width: `${completion}%` }} />
+                    </div>
+                    <small>
+                      {job.progress.completedFiles}/{job.progress.totalFiles} compiled · {job.progress.failedFiles} failed
+                    </small>
+                  </button>
+                );
+              })}
             </div>
           </section>
         </aside>
 
         <section className="preview-column">
-          <div className="panel preview-panel">
-            <div className="section-heading">
-              <h2>{selectedDocument?.title ?? "Preview"}</h2>
-              <p>{selectedDocument?.format ?? "No document selected"}</p>
+          <section className="panel reader-header">
+            <div className="reader-header-copy">
+              <p className="eyebrow">Reader</p>
+              <h2>{selectedDocument?.title ?? activeDocumentSummary?.title ?? "Select a compiled document"}</h2>
+              <p className="reader-path">{selectedDocument?.path ?? activeDocumentSummary?.path ?? activeJob?.source?.label ?? "Awaiting import."}</p>
             </div>
-            <div
-              className="preview-surface"
-              dangerouslySetInnerHTML={{
-                __html:
-                  selectedDocument?.htmlPreview ??
-                  '<article class="dg-doc"><header class="dg-doc-header"><p class="dg-doc-kicker">ready</p><h1>Select a compiled document</h1></header><p>The preview surface is tuned for readable technical content: restrained line length, clear hierarchy, and room for code, tables, and notebook outputs.</p></article>'
-              }}
-            />
-          </div>
+
+            <div className="metric-grid">
+              <div className="metric-card">
+                <span>Fidelity</span>
+                <strong>{selectedDocumentMetrics?.fidelityTier ?? "A-"}</strong>
+              </div>
+              <div className="metric-card">
+                <span>Words</span>
+                <strong>{selectedDocumentMetrics ? compactNumberFormatter.format(selectedDocumentMetrics.wordCount) : "0"}</strong>
+              </div>
+              <div className="metric-card">
+                <span>Graph integrity</span>
+                <strong>{selectedDocumentMetrics ? `${selectedDocumentMetrics.graphIntegrity}%` : "0%"}</strong>
+              </div>
+              <div className="metric-card">
+                <span>Job progress</span>
+                <strong>{activeJobOverview ? `${activeJobOverview.completion}%` : "0%"}</strong>
+              </div>
+            </div>
+
+            <div className="reader-chip-row">
+              <span className="reader-chip">{selectedDocument?.format ?? activeDocumentSummary?.format ?? "n/a"}</span>
+              <span className={`reader-chip tone-${toneForJobState(activeJob?.state ?? "queued")}`}>{formatStateLabel(activeJob?.state ?? "queued")}</span>
+              <span className="reader-chip">
+                {selectedDocument ? `${selectedDocument.links.length} links` : `${libraryOverview.documents} docs`}
+              </span>
+            </div>
+          </section>
+
+          <section className="panel preview-panel">
+            <div className="section-heading preview-heading">
+              <div>
+                <h2>Document canvas</h2>
+                <p>Rendered preview, markdown export, and canonical IR are available from the same normalized artifact.</p>
+              </div>
+              <div className="view-switch">
+                <button
+                  className={readerView === "rendered" ? "active" : ""}
+                  onClick={() => setReaderView("rendered")}
+                  type="button"
+                >
+                  Rendered
+                </button>
+                <button
+                  className={readerView === "markdown" ? "active" : ""}
+                  onClick={() => setReaderView("markdown")}
+                  type="button"
+                >
+                  Markdown
+                </button>
+                <button
+                  className={readerView === "ir" ? "active" : ""}
+                  onClick={() => setReaderView("ir")}
+                  type="button"
+                >
+                  Canonical IR
+                </button>
+              </div>
+            </div>
+
+            {readerView === "rendered" ? (
+              <div
+                className="preview-surface"
+                dangerouslySetInnerHTML={{
+                  __html:
+                    selectedDocument?.htmlPreview ??
+                    '<article class="dg-doc"><header class="dg-doc-header"><p class="dg-doc-kicker">ready</p><h1>Import a documentation source</h1></header><p>Use the left rail to compile a file or repository, then inspect the rendered output here with link graph, diagnostics, and source fidelity context preserved.</p></article>'
+                }}
+              />
+            ) : (
+              <pre className="code-pane">
+                <code>{readerView === "markdown" ? selectedDocument?.markdownPreview ?? "" : selectedDocument?.jsonPreview ?? ""}</code>
+              </pre>
+            )}
+          </section>
         </section>
 
         <aside className="right-rail">
           <section className="panel">
             <div className="section-heading">
-              <h2>Artifacts</h2>
-              <p>{activeJob?.documentIds.length ?? 0} documents</p>
+              <h2>Library</h2>
+              <p>{libraryOverview.documents} artifacts</p>
             </div>
+            <label className="document-filter">
+              <span>Filter</span>
+              <input
+                value={documentFilter}
+                onChange={(event) => setDocumentFilter(event.target.value)}
+                placeholder="Search title, path, or format"
+              />
+            </label>
             <div className="job-list">
-              {(activeJob?.documentIds ?? []).map((docId) => (
+              {filteredDocuments.map((document) => (
                 <button
-                  className={`job-card ${selectedDocumentId === docId ? "active" : ""}`}
-                  key={docId}
-                  onClick={() => setSelectedDocumentId(docId)}
+                  className={`job-card ${selectedDocumentId === document.docId ? "active" : ""}`}
+                  key={document.docId}
+                  onClick={() => {
+                    setSelectedDocumentId(document.docId);
+                    setReaderView("rendered");
+                  }}
                   type="button"
                 >
-                  <strong>{docId}</strong>
-                  <small>{selectedDocument?.path}</small>
+                  <div className="job-card-header">
+                    <strong>{document.title ?? document.path}</strong>
+                    <span className="status-pill neutral">{document.format}</span>
+                  </div>
+                  <span>{document.path}</span>
+                  <small>
+                    {document.diagnostics.length} diagnostics · {document.canonicalHash.slice(0, 10)}
+                  </small>
                 </button>
               ))}
             </div>
@@ -301,7 +785,40 @@ export function App() {
 
           <section className="panel">
             <div className="section-heading">
-              <h2>On this page</h2>
+              <h2>Graph</h2>
+              <p>{selectedDocumentMetrics?.graphIntegrity ?? 0}% resolved</p>
+            </div>
+            <div className="mini-metric-grid">
+              <div className="mini-metric-card">
+                <span>Outgoing</span>
+                <strong>{selectedDocumentMetrics?.outgoingLinks ?? 0}</strong>
+              </div>
+              <div className="mini-metric-card">
+                <span>Backlinks</span>
+                <strong>{selectedDocumentMetrics?.backlinks ?? 0}</strong>
+              </div>
+              <div className="mini-metric-card">
+                <span>Resolved</span>
+                <strong>{selectedDocumentMetrics?.resolvedLinks ?? 0}</strong>
+              </div>
+              <div className="mini-metric-card">
+                <span>Raw embeds</span>
+                <strong>{selectedDocumentMetrics?.rawEmbeds ?? 0}</strong>
+              </div>
+              <div className="mini-metric-card">
+                <span>Warnings</span>
+                <strong>{selectedDocumentMetrics?.warnings ?? 0}</strong>
+              </div>
+              <div className="mini-metric-card">
+                <span>Errors</span>
+                <strong>{selectedDocumentMetrics?.errors ?? 0}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="section-heading">
+              <h2>Outline</h2>
               <p>{selectedDocument?.toc.length ?? 0} headings</p>
             </div>
             <ul className="toc-list">
@@ -316,15 +833,48 @@ export function App() {
           <section className="panel">
             <div className="section-heading">
               <h2>Diagnostics</h2>
-              <p>{selectedDocument?.diagnostics.length ?? 0} items</p>
+              <p>{selectedDocumentMetrics?.diagnostics ?? 0} items</p>
             </div>
             <div className="diagnostic-list">
               {(selectedDocument?.diagnostics ?? []).map((diagnostic) => (
-                <div className={`diagnostic ${diagnostic.severity}`} key={diagnostic.id}>
+                <div className={`diagnostic ${toneForDiagnosticSeverity(diagnostic.severity)}`} key={diagnostic.id}>
                   <strong>{diagnostic.code}</strong>
                   <p>{diagnostic.message}</p>
                 </div>
               ))}
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="section-heading">
+              <h2>Platform</h2>
+              <p>Live metrics</p>
+            </div>
+            <div className="mini-metric-grid">
+              <div className="mini-metric-card">
+                <span>File imports</span>
+                <strong>{compactNumberFormatter.format(platformOverview?.fileImports ?? 0)}</strong>
+              </div>
+              <div className="mini-metric-card">
+                <span>Repo imports</span>
+                <strong>{compactNumberFormatter.format(platformOverview?.repoImports ?? 0)}</strong>
+              </div>
+              <div className="mini-metric-card">
+                <span>Local imports</span>
+                <strong>{compactNumberFormatter.format(platformOverview?.localImports ?? 0)}</strong>
+              </div>
+              <div className="mini-metric-card">
+                <span>Compile mean</span>
+                <strong>{formatLatency(platformOverview?.averageCompileMs ?? null)}</strong>
+              </div>
+              <div className="mini-metric-card">
+                <span>Processed</span>
+                <strong>{activeJobOverview ? integerFormatter.format(activeJobOverview.processed) : "0"}</strong>
+              </div>
+              <div className="mini-metric-card">
+                <span>Diagnostics</span>
+                <strong>{compactNumberFormatter.format(libraryOverview.diagnostics)}</strong>
+              </div>
             </div>
           </section>
         </aside>
