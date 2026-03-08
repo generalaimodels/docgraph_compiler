@@ -1102,27 +1102,9 @@ export function App() {
                   <h2>Document canvas</h2>
                   <p>Rendered preview, markdown export, canonical IR, and original source are available from the same normalized artifact.</p>
                 </div>
-                <div className="preview-meta-grid">
-                  <div className="preview-meta-card">
-                    <span>Format</span>
-                    <strong>{selectedDocument?.format ?? activeDocumentSummary?.format ?? "n/a"}</strong>
-                  </div>
-                  <div className="preview-meta-card">
-                    <span>Headings</span>
-                    <strong>{selectedDocumentMetrics?.headings ?? 0}</strong>
-                  </div>
-                  <div className="preview-meta-card">
-                    <span>Blocks</span>
-                    <strong>{selectedDocumentMetrics?.blocks ?? 0}</strong>
-                  </div>
-                  <div className="preview-meta-card">
-                    <span>Diagnostics</span>
-                    <strong>{selectedDocumentMetrics?.diagnostics ?? 0}</strong>
-                  </div>
-                </div>
               </div>
               <div className="preview-toolbar-actions">
-                <div className="view-switch">
+                <div className="view-switch" role="tablist" aria-label="Document views">
                   <button
                     className={readerView === "rendered" ? "active" : ""}
                     onClick={() => setReaderView("rendered")}
@@ -1151,6 +1133,24 @@ export function App() {
                   >
                     Source
                   </button>
+                </div>
+              </div>
+              <div className="preview-meta-grid">
+                <div className="preview-meta-card">
+                  <span>Format</span>
+                  <strong>{selectedDocument?.format ?? activeDocumentSummary?.format ?? "n/a"}</strong>
+                </div>
+                <div className="preview-meta-card">
+                  <span>Headings</span>
+                  <strong>{selectedDocumentMetrics?.headings ?? 0}</strong>
+                </div>
+                <div className="preview-meta-card">
+                  <span>Blocks</span>
+                  <strong>{selectedDocumentMetrics?.blocks ?? 0}</strong>
+                </div>
+                <div className="preview-meta-card">
+                  <span>Diagnostics</span>
+                  <strong>{selectedDocumentMetrics?.diagnostics ?? 0}</strong>
                 </div>
               </div>
             </div>
