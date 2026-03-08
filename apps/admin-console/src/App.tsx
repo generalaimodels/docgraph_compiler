@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, MouseEvent as ReactMouseEvent } from "react";
 import type { DocumentResponse, DocumentSummary, JobSummary } from "@docgraph/api-contracts";
 
 type Mode = "file" | "local" | "repo";
@@ -214,6 +214,21 @@ function formatPaginationLabel(page: number, pageSize: number, totalItems: numbe
   return `${start}-${end} of ${totalItems}`;
 }
 
+function normalizeHref(href: string): string {
+  const [pathWithoutQuery = ""] = href.split("?");
+  return pathWithoutQuery.replace(/^\.?\//u, "").replace(/\\/gu, "/");
+}
+
+function anchorFromHref(href: string): string | null {
+  const hashIndex = href.indexOf("#");
+  if (hashIndex === -1) {
+    return null;
+  }
+
+  const anchor = href.slice(hashIndex + 1).trim();
+  return anchor.length > 0 ? anchor : null;
+}
+
 function countWords(text: string): number {
   const trimmed = text.trim();
   if (trimmed.length === 0) {
@@ -287,6 +302,7 @@ export function App() {
   const [showInternalArtifacts, setShowInternalArtifacts] = useState<boolean>(false);
   const [platformMetrics, setPlatformMetrics] = useState<HealthResponse["metrics"] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingAnchor, setPendingAnchor] = useState<string | null>(null);
   const [jobPagination, setJobPagination] = useState<PaginationState>({
     page: 1,
     pageSize: JOB_PAGE_SIZE
@@ -304,6 +320,7 @@ export function App() {
     pageSize: DIAGNOSTIC_PAGE_SIZE
   });
   const pollTimerRef = useRef<number | null>(null);
+  const previewStageRef = useRef<HTMLDivElement | null>(null);
 
   const activeJob = useMemo(
     () => jobs.find((job) => job.jobId === activeJobId) ?? null,
@@ -353,6 +370,41 @@ export function App() {
     () => paginateItems(selectedDocument?.diagnostics ?? [], diagnosticPagination.page, diagnosticPagination.pageSize),
     [diagnosticPagination.page, diagnosticPagination.pageSize, selectedDocument?.diagnostics]
   );
+  const recommendedDocuments = useMemo(() => {
+    if (!selectedDocument) {
+      return [];
+    }
+
+    const documentIndex = new Map(jobDocuments.map((document) => [document.docId, document] as const));
+    const ordered: DocumentSummary[] = [];
+    const seen = new Set<string>();
+
+    const pushDocument = (docId: string | undefined) => {
+      if (!docId || docId === selectedDocument.docId || seen.has(docId)) {
+        return;
+      }
+
+      const document = documentIndex.get(docId);
+      if (!document) {
+        return;
+      }
+
+      seen.add(docId);
+      ordered.push(document);
+    };
+
+    for (const link of selectedDocument.links) {
+      if (link.resolved && (link.linkType === "doc-to-doc" || link.linkType === "doc-to-anchor")) {
+        pushDocument(link.dstDocId);
+      }
+    }
+
+    for (const backlink of selectedDocument.backlinks) {
+      pushDocument(backlink.srcDocId);
+    }
+
+    return ordered.slice(0, 6);
+  }, [jobDocuments, selectedDocument]);
 
   const activeJobOverview = useMemo(() => {
     if (!activeJob) {
@@ -439,6 +491,85 @@ export function App() {
     setSelectedDocument(null);
     setJobDocuments([]);
     setReaderView("rendered");
+    setPendingAnchor(null);
+    setError(null);
+  }
+
+  function scrollToAnchor(anchor: string): void {
+    const selector = `#${window.CSS?.escape?.(anchor) ?? anchor}`;
+    const anchorElement = previewStageRef.current?.querySelector(selector);
+    if (!(anchorElement instanceof HTMLElement)) {
+      return;
+    }
+
+    anchorElement.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    });
+  }
+
+  function handlePreviewClick(event: ReactMouseEvent<HTMLDivElement>): void {
+    const target = event.target instanceof HTMLElement ? event.target.closest("a") : null;
+    if (!(target instanceof HTMLAnchorElement) || !selectedDocument) {
+      return;
+    }
+
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+      return;
+    }
+
+    const href = target.getAttribute("href");
+    if (!href) {
+      return;
+    }
+
+    const hrefAnchor = anchorFromHref(href);
+
+    if (/^(?:https?:)?\/\//u.test(href) || href.startsWith("mailto:")) {
+      event.preventDefault();
+      window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    if (href.startsWith("#") && hrefAnchor) {
+      event.preventDefault();
+      setPendingAnchor(hrefAnchor);
+      return;
+    }
+
+    const matchedLink =
+      selectedDocument.links.find((link) => link.hrefRaw === href) ??
+      selectedDocument.links.find((link) => normalizeHref(link.hrefRaw) === normalizeHref(href));
+
+    if (matchedLink?.resolved && matchedLink.dstDocId) {
+      event.preventDefault();
+      setError(null);
+      setSelectedDocumentId(matchedLink.dstDocId);
+      setReaderView("rendered");
+      setPendingAnchor(matchedLink.anchor ?? hrefAnchor);
+      return;
+    }
+
+    if (matchedLink?.linkType === "doc-to-anchor" && (matchedLink.anchor ?? hrefAnchor)) {
+      event.preventDefault();
+      setPendingAnchor(matchedLink.anchor ?? hrefAnchor);
+      return;
+    }
+
+    if (matchedLink?.linkType === "doc-to-asset") {
+      event.preventDefault();
+      setError(`Asset navigation for "${href}" is not yet available in the reader.`);
+      return;
+    }
+
+    if (hrefAnchor) {
+      event.preventDefault();
+      setPendingAnchor(hrefAnchor);
+      return;
+    }
+
+    event.preventDefault();
+    setError(`Link target "${href}" is not available in the current document graph.`);
   }
 
   useEffect(() => {
@@ -620,6 +751,21 @@ export function App() {
       page: 1
     }));
   }, [selectedDocumentId]);
+
+  useEffect(() => {
+    if (!pendingAnchor || readerView !== "rendered") {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      scrollToAnchor(pendingAnchor);
+      setPendingAnchor(null);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [pendingAnchor, readerView, selectedDocumentId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1010,10 +1156,11 @@ export function App() {
             </div>
 
             <div className="preview-body">
-              <div className="preview-stage">
+              <div className="preview-stage" ref={previewStageRef}>
                 {readerView === "rendered" ? (
                   <div
                     className="preview-surface"
+                    onClick={handlePreviewClick}
                     dangerouslySetInnerHTML={{
                       __html:
                         selectedDocument?.htmlPreview ??
@@ -1117,6 +1264,33 @@ export function App() {
 
           <section className="panel">
             <div className="section-heading">
+              <h2>Continue reading</h2>
+              <p>{recommendedDocuments.length} suggestions</p>
+            </div>
+            <p className="supporting-copy">Resolved graph neighbors and backlinks for the current document.</p>
+            <div className="recommendation-list">
+              {recommendedDocuments.map((document) => (
+                <button
+                  className="recommendation-card"
+                  key={document.docId}
+                  onClick={() => {
+                    setError(null);
+                    setSelectedDocumentId(document.docId);
+                    setReaderView("rendered");
+                    setPendingAnchor(null);
+                  }}
+                  type="button"
+                >
+                  <strong>{documentLabel(document)}</strong>
+                  <span>{document.path}</span>
+                </button>
+              ))}
+              {recommendedDocuments.length === 0 ? <p className="supporting-copy compact">No resolved adjacent documents yet.</p> : null}
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="section-heading">
               <h2>Graph</h2>
               <p>{selectedDocumentMetrics?.graphIntegrity ?? 0}% resolved</p>
             </div>
@@ -1156,7 +1330,16 @@ export function App() {
             <ul className="toc-list panel-scroll">
               {pagedTocEntries.map((entry) => (
                 <li key={entry.slug} style={{ paddingLeft: `${(entry.level - 1) * 12}px` }}>
-                  <a href={`#${entry.slug}`}>{entry.title}</a>
+                  <button
+                    className="toc-button"
+                    onClick={() => {
+                      setReaderView("rendered");
+                      setPendingAnchor(entry.slug);
+                    }}
+                    type="button"
+                  >
+                    {entry.title}
+                  </button>
                 </li>
               ))}
             </ul>

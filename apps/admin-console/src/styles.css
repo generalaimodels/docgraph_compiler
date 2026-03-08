@@ -29,10 +29,6 @@
   box-sizing: border-box;
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
 body {
   margin: 0;
   min-height: 100vh;
@@ -256,6 +252,10 @@ a {
 .supporting-copy {
   margin: 0 0 18px;
   line-height: 1.6;
+}
+
+.supporting-copy.compact {
+  margin-bottom: 0;
 }
 
 .mode-switch,
@@ -725,8 +725,7 @@ a {
 }
 
 .preview-surface {
-  display: grid;
-  place-items: start center;
+  display: block;
   min-height: 100%;
   padding: clamp(8px, 0.8vw, 12px) clamp(12px, 1.8vw, 28px);
 }
@@ -778,6 +777,42 @@ a {
   border-color: rgba(15, 118, 110, 0.22);
 }
 
+.recommendation-list {
+  display: grid;
+  gap: 12px;
+}
+
+.recommendation-card {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(17, 94, 89, 0.08);
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.recommendation-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(17, 94, 89, 0.18);
+  box-shadow: 0 12px 28px rgba(41, 35, 29, 0.08);
+}
+
+.recommendation-card strong {
+  font-size: 0.96rem;
+}
+
+.recommendation-card span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .toc-list {
   list-style: none;
   margin: 0;
@@ -791,6 +826,18 @@ a {
 }
 
 .toc-list a:hover {
+  color: var(--accent-strong);
+}
+
+.toc-button {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.toc-button:hover {
   color: var(--accent-strong);
 }
 
@@ -902,6 +949,22 @@ a {
   background: rgba(15, 118, 110, 0.08);
   color: var(--accent-strong);
   font-size: 0.9em;
+}
+
+.dg-doc a {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-decoration-color: rgba(17, 94, 89, 0.28);
+  text-underline-offset: 0.14em;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    text-decoration-color 120ms ease;
+}
+
+.dg-doc a:hover {
+  color: var(--accent);
+  text-decoration-color: rgba(15, 118, 110, 0.55);
 }
 
 .dg-code-block,
