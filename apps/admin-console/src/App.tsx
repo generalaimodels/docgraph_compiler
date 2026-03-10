@@ -331,14 +331,9 @@ function anchorFromHref(href: string): string | null {
   return anchor.length > 0 ? anchor : null;
 }
 
-function sectionOffsetForPage(page: AppPage, sectionId: string): number {
+function sectionOffsetForPage(_page: AppPage, _sectionId: string): number {
   const header = document.querySelector(".site-header");
-  const localNavigation = document.querySelector(".local-nav");
-  const headerOffset = header instanceof HTMLElement ? header.getBoundingClientRect().height + 24 : 24;
-  const localNavOffset =
-    sectionId !== defaultSectionId(page) && localNavigation instanceof HTMLElement ? localNavigation.getBoundingClientRect().height + 18 : 0;
-
-  return headerOffset + localNavOffset;
+  return header instanceof HTMLElement ? header.getBoundingClientRect().height + 24 : 24;
 }
 
 function countWords(text: string): number {
@@ -348,6 +343,19 @@ function countWords(text: string): number {
   }
 
   return trimmed.split(/\s+/u).length;
+}
+
+function readerViewLabel(view: ReaderView): string {
+  switch (view) {
+    case "rendered":
+      return "Rendered article";
+    case "markdown":
+      return "Normalized markdown";
+    case "ir":
+      return "Canonical IR";
+    case "source":
+      return "Original source";
+  }
 }
 
 function encodeTextToBase64(value: string): string {
@@ -361,6 +369,37 @@ async function encodeToBase64(file: File): Promise<string> {
     binary += String.fromCharCode(byte);
   }
   return btoa(binary);
+}
+
+function formatUuid(bytes: Uint8Array): string {
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+function createIdempotencyKey(): string {
+  const cryptoApi = globalThis.crypto;
+
+  if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
+    return cryptoApi.randomUUID();
+  }
+
+  if (cryptoApi && typeof cryptoApi.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    cryptoApi.getRandomValues(bytes);
+    bytes.set([((bytes.at(6) ?? 0) & 0x0f) | 0x40], 6);
+    bytes.set([((bytes.at(8) ?? 0) & 0x3f) | 0x80], 8);
+    return formatUuid(bytes);
+  }
+
+  const seed = `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}${Math.random().toString(16).slice(2)}`
+    .padEnd(32, "0")
+    .slice(0, 32)
+    .split("");
+
+  seed[12] = "4";
+  seed[16] = (8 + (Number.parseInt(seed[16] ?? "0", 16) % 4)).toString(16);
+
+  return `${seed.slice(0, 8).join("")}-${seed.slice(8, 12).join("")}-${seed.slice(12, 16).join("")}-${seed.slice(16, 20).join("")}-${seed.slice(20, 32).join("")}`;
 }
 
 function PaginationControls(props: {
@@ -1230,7 +1269,7 @@ export function App() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID()
+          "Idempotency-Key": createIdempotencyKey()
         },
         body: JSON.stringify({
           path,
@@ -1260,7 +1299,7 @@ export function App() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID()
+          "Idempotency-Key": createIdempotencyKey()
         },
         body: JSON.stringify({
           source: {
@@ -1295,7 +1334,7 @@ export function App() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID()
+          "Idempotency-Key": createIdempotencyKey()
         },
         body: JSON.stringify({
           source: {
@@ -1326,9 +1365,9 @@ export function App() {
       <div className="ambient ambient-left" />
       <div className="ambient ambient-right" />
       <div className="layout-shell">
-        <header className="site-header panel">
+        <header className={`site-header panel ${page === "reader" ? "site-header-classic" : ""}`}>
           <div className="brand-block">
-            <div className="mark">DG//</div>
+            <div className={`mark ${page === "reader" ? "mark-compact" : ""}`}>DG//</div>
             <div className="brand-copy">
               <p className="eyebrow">DocGraph Compiler</p>
               <strong>Compiler-grade documentation conversion and reading.</strong>
@@ -1349,10 +1388,26 @@ export function App() {
                 </button>
               ))}
             </nav>
-            <p className="site-context">
-              {integerFormatter.format(libraryOverview.documents)} artifacts · {formatLatency(platformOverview?.averageCompileMs ?? null)} mean compile ·{" "}
-              {activeJob?.source?.label ?? "No active source"}
-            </p>
+            {page === "reader" ? (
+              <div className="site-reader-tools">
+                <label className="site-search">
+                  <input
+                    aria-label="Search documentation"
+                    onChange={(event) => setDocumentFilter(event.target.value)}
+                    placeholder="Search the docs"
+                    value={documentFilter}
+                  />
+                </label>
+                <p className="site-context">
+                  {selectedDocumentEntry?.path ?? activeJob?.source?.label ?? "Load a compiled document to start reading."}
+                </p>
+              </div>
+            ) : (
+              <p className="site-context">
+                {integerFormatter.format(libraryOverview.documents)} artifacts · {formatLatency(platformOverview?.averageCompileMs ?? null)} mean compile ·{" "}
+                {activeJob?.source?.label ?? "No active source"}
+              </p>
+            )}
           </div>
         </header>
 
@@ -1501,22 +1556,14 @@ export function App() {
 
           {page === "conversion" ? (
             <section className="page-stack">
-              <section className="panel page-intro-panel" id="conversion-top">
+              <section className="panel workflow-page-header" id="conversion-top">
                 <div className="page-title-row">
                   <div className="page-title-copy">
-                    <p className="eyebrow">Conversion page</p>
-                    <h1>Keep ingestion on its own page with deterministic entry points and visible job state.</h1>
+                    <p className="eyebrow">Conversion</p>
+                    <h1>Import workflows and job status only.</h1>
                     <p className="supporting-copy">
-                      Import a file, a local repository tree, or a GitHub snapshot without mixing conversion controls into the documentation reader.
+                      Start a file, local-tree, or GitHub import and monitor the resulting compilation jobs on this page.
                     </p>
-                    <div className="hero-actions">
-                      <button className="cta-primary" onClick={() => navigateToPage("reader")} type="button">
-                        Open documentation page
-                      </button>
-                      <button className="cta-secondary" onClick={() => navigateToPage("metrics")} type="button">
-                        Open metrics page
-                      </button>
-                    </div>
                   </div>
                   <div className="summary-pill-row">
                     <span className="reader-chip">Queued {jobStateOverview.queued}</span>
@@ -1527,16 +1574,14 @@ export function App() {
                 </div>
               </section>
 
-              <SectionNavigation activeSectionId={activeSectionId} onNavigate={navigateToSection} page="conversion" />
-
               <div className="conversion-grid">
                 <section className="panel" id="conversion-entry">
                   <div className="section-heading">
-                    <h2>Conversion entrypoints</h2>
+                    <h2>Import source</h2>
                     <p>File, local, or GitHub</p>
                   </div>
                   <p className="supporting-copy">
-                    Narrow import surfaces keep parsing deterministic and make failures visible at the source boundary.
+                    Narrow import surfaces keep parsing deterministic and keep failures pinned to the source boundary.
                   </p>
 
                   <div className="mode-switch">
@@ -1614,7 +1659,7 @@ export function App() {
                 <div className="page-side-stack">
                   <section className="panel" id="conversion-jobs">
                     <div className="section-heading">
-                      <h2>Recent jobs</h2>
+                      <h2>Job status</h2>
                       <p>{jobs.length} tracked</p>
                     </div>
                     <div className="job-list recent-job-list">
@@ -1651,140 +1696,20 @@ export function App() {
                       onPageChange={(nextPage) => setJobPagination((current) => ({ ...current, page: nextPage }))}
                     />
                   </section>
-
-                  <section className="panel" id="conversion-model">
-                    <div className="section-heading">
-                      <h2>Recommended split</h2>
-                      <p>Clear user lanes</p>
-                    </div>
-                    <div className="lane-grid">
-                      <div className="lane-card">
-                        <strong>Main page</strong>
-                        <p>Entry point, launch actions, and system snapshot.</p>
-                      </div>
-                      <div className="lane-card">
-                        <strong>Conversion page</strong>
-                        <p>Source import forms and job progress only.</p>
-                      </div>
-                      <div className="lane-card">
-                        <strong>Documentation page</strong>
-                        <p>Reader, library, outline, and reading recommendations.</p>
-                      </div>
-                      <div className="lane-card">
-                        <strong>Metrics page</strong>
-                        <p>Fidelity, graph quality, diagnostics, and operational analysis.</p>
-                      </div>
-                    </div>
-                  </section>
                 </div>
               </div>
             </section>
           ) : null}
 
           {page === "reader" ? (
-            <section className="page-stack">
-              <section className="panel reader-page-intro docs-page-intro" id="reader-top">
-                <div className="docs-breadcrumb-row">
-                  <div className="docs-breadcrumb">
-                    <button className="docs-breadcrumb-home" onClick={() => navigateToPage("main")} type="button">
-                      Home
-                    </button>
-                    {readerBreadcrumbs.map((segment, index) => (
-                      <span className="docs-breadcrumb-segment" key={`${index}:${segment}`}>
-                        <span aria-hidden="true">/</span>
-                        {fallbackDocumentTitle(segment)}
-                      </span>
-                    ))}
-                    {selectedDocumentEntry ? (
-                      <span className="docs-breadcrumb-segment docs-breadcrumb-current">
-                        <span aria-hidden="true">/</span>
-                        {fallbackDocumentTitle(selectedDocumentEntry.path.split("/").at(-1) ?? selectedDocumentEntry.path)}
-                      </span>
-                    ) : null}
+            <section className="page-stack reader-classic-page">
+              <div className="reader-classic-grid" id="reader-top">
+                <aside className="panel reader-classic-sidebar" id="reader-library">
+                  <div className="reader-sidebar-header">
+                    <h2>Documentation</h2>
+                    <p>{filteredDocuments.length} pages</p>
                   </div>
-                  <div className="summary-pill-row docs-summary-row">
-                    <span className="reader-chip">{selectedDocument?.format ?? activeDocumentSummary?.format ?? "n/a"}</span>
-                    <span className={`reader-chip tone-${toneForJobState(activeJob?.state ?? "queued")}`}>{formatStateLabel(activeJob?.state ?? "queued")}</span>
-                    <span className={`reader-chip ${selectedDocumentIsInternal ? "tone-warning" : "tone-success"}`}>
-                      {selectedDocumentIsInternal ? "internal artifact" : "reader document"}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="docs-page-header">
-                  <div className="page-title-copy">
-                    <p className="eyebrow">Documentation page</p>
-                    <h1>{readerTitle}</h1>
-                    <p className="reader-path">{selectedDocumentEntry?.path ?? activeJob?.source?.label ?? "Awaiting import."}</p>
-                    <p className="supporting-copy">
-                      Converted documents should read like a polished docs site: clear section navigation on the left, uninterrupted content in the middle, and contextual guidance on the right.
-                    </p>
-                  </div>
-
-                  <div className="docs-action-grid">
-                    <button className="docs-utility-card" onClick={() => navigateToPage("conversion")} type="button">
-                      <strong>Go to conversion</strong>
-                      <span>Import another source or switch compilation jobs.</span>
-                    </button>
-                    <button className="docs-utility-card" onClick={() => navigateToPage("metrics")} type="button">
-                      <strong>Inspect metrics</strong>
-                      <span>Review fidelity, graph health, and diagnostics separately.</span>
-                    </button>
-                    <button
-                      className="docs-utility-card"
-                      onClick={() => {
-                        setReaderView("source");
-                        setPendingSectionId("reader-canvas");
-                      }}
-                      type="button"
-                    >
-                      <strong>Open original source</strong>
-                      <span>Jump to the source view for this normalized artifact.</span>
-                    </button>
-                  </div>
-                </div>
-
-                {readerRelatedDocuments.length > 0 ? (
-                  <div className="docs-guide-strip">
-                    <strong>Related guides</strong>
-                    <div className="docs-guide-links">
-                      {readerRelatedDocuments.map((document) => (
-                        <button
-                          className="docs-guide-link"
-                          key={document.docId}
-                          onClick={() => openDocument(document.docId, { nextPage: "reader" })}
-                          type="button"
-                        >
-                          {documentLabel(document)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </section>
-
-              <SectionNavigation activeSectionId={activeSectionId} onNavigate={navigateToSection} page="reader" />
-
-              <div className="reader-page-grid reader-docs-grid">
-                <aside className="panel docs-nav-panel" id="reader-library">
-                  <div className="section-heading">
-                    <h2>Section navigation</h2>
-                    <p>
-                      {filteredDocuments.length}/{libraryOverview.documents} visible
-                    </p>
-                  </div>
-                  <p className="supporting-copy">
-                    Browse converted guides, tutorials, and reference pages from the active documentation corpus.
-                  </p>
-                  <label className="document-filter docs-nav-filter">
-                    <span>Search section navigation</span>
-                    <input
-                      value={documentFilter}
-                      onChange={(event) => setDocumentFilter(event.target.value)}
-                      placeholder="Search title, path, or format"
-                    />
-                  </label>
-                  <label className="toggle-control">
+                  <label className="toggle-control reader-sidebar-toggle">
                     <input
                       checked={showInternalArtifacts}
                       onChange={(event) => setShowInternalArtifacts(event.target.checked)}
@@ -1792,7 +1717,7 @@ export function App() {
                     />
                     <span>Show internal artifacts and templates</span>
                   </label>
-                  <div className="docs-nav-list artifact-list">
+                  <div className="docs-nav-list artifact-list reader-sidebar-list">
                     {pagedDocuments.map((document) => (
                       <button
                         className={`docs-nav-item ${selectedDocumentId === document.docId ? "active" : ""}`}
@@ -1816,17 +1741,67 @@ export function App() {
                   />
                 </aside>
 
-                <section className="preview-column docs-content-column">
-                  <section className="panel reader-header docs-reader-header">
-                    <div className="section-heading">
-                      <h2>Guide overview</h2>
-                      <p>{selectedDocumentMetrics?.wordCount ?? 0} words</p>
+                <section className="reader-classic-article">
+                  <section className="panel reader-article-header" id="reader-graph">
+                    <div className="docs-breadcrumb reader-classic-breadcrumb">
+                      <button className="docs-breadcrumb-home" onClick={() => navigateToPage("main")} type="button">
+                        Home
+                      </button>
+                      {readerBreadcrumbs.map((segment, index) => (
+                        <span className="docs-breadcrumb-segment" key={`${index}:${segment}`}>
+                          <span aria-hidden="true">/</span>
+                          {fallbackDocumentTitle(segment)}
+                        </span>
+                      ))}
+                      {selectedDocumentEntry ? (
+                        <span className="docs-breadcrumb-segment docs-breadcrumb-current">
+                          <span aria-hidden="true">/</span>
+                          {fallbackDocumentTitle(selectedDocumentEntry.path.split("/").at(-1) ?? selectedDocumentEntry.path)}
+                        </span>
+                      ) : null}
                     </div>
-                    <div className="docs-content-topbar">
-                      <div className="reader-header-copy">
-                        <p className="eyebrow">Guide</p>
-                        <h2>{readerTitle}</h2>
+
+                    <div className="reader-article-title-row">
+                      <div className="reader-classic-title-copy">
+                        <p className="eyebrow">Documentation</p>
+                        <h1>{readerTitle}</h1>
                         <p className="reader-path">{selectedDocumentEntry?.path ?? activeJob?.source?.label ?? "Awaiting import."}</p>
+                      </div>
+                      <div className="reader-chip-row">
+                        <span className="reader-chip">{selectedDocument?.format ?? activeDocumentSummary?.format ?? "n/a"}</span>
+                        <span className={`reader-chip tone-${toneForJobState(activeJob?.state ?? "queued")}`}>{formatStateLabel(activeJob?.state ?? "queued")}</span>
+                        <span className={`reader-chip ${selectedDocumentIsInternal ? "tone-warning" : "tone-success"}`}>
+                          {selectedDocumentIsInternal ? "internal artifact" : "reader document"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="reader-classic-meta-grid">
+                      <div className="metric-card">
+                        <span>Fidelity</span>
+                        <strong>{selectedDocumentMetrics?.fidelityTier ?? "A-"}</strong>
+                      </div>
+                      <div className="metric-card">
+                        <span>Integrity</span>
+                        <strong>{selectedDocumentMetrics?.graphIntegrity ?? 0}%</strong>
+                      </div>
+                      <div className="metric-card">
+                        <span>Headings</span>
+                        <strong>{selectedDocumentMetrics?.headings ?? 0}</strong>
+                      </div>
+                      <div className="metric-card">
+                        <span>Words</span>
+                        <strong>{selectedDocumentMetrics?.wordCount ?? 0}</strong>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="panel preview-panel reader-classic-canvas" id="reader-canvas">
+                    <div className="reader-classic-canvas-bar">
+                      <div className="preview-heading">
+                        <div>
+                          <h2>{readerViewLabel(readerView)}</h2>
+                          <p>Classic documentation reading surface with a left doc tree, centered content, and contextual article rail.</p>
+                        </div>
                       </div>
                       <div className="preview-toolbar-actions">
                         <div className="view-switch" role="tablist" aria-label="Document views">
@@ -1861,53 +1836,6 @@ export function App() {
                         </div>
                       </div>
                     </div>
-                    <div className="docs-meta-row">
-                      <div className="metric-card">
-                        <span>Fidelity</span>
-                        <strong>{selectedDocumentMetrics?.fidelityTier ?? "A-"}</strong>
-                      </div>
-                      <div className="metric-card">
-                        <span>Graph integrity</span>
-                        <strong>{selectedDocumentMetrics ? `${selectedDocumentMetrics.graphIntegrity}%` : "0%"}</strong>
-                      </div>
-                      <div className="metric-card">
-                        <span>Headings</span>
-                        <strong>{selectedDocumentMetrics?.headings ?? 0}</strong>
-                      </div>
-                      <div className="metric-card">
-                        <span>Job progress</span>
-                        <strong>{activeJobOverview ? `${activeJobOverview.completion}%` : "0%"}</strong>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section className="panel preview-panel docs-preview-panel" id="reader-canvas">
-                    <div className="preview-toolbar docs-preview-toolbar">
-                      <div className="preview-heading">
-                        <div>
-                          <h2>Documentation canvas</h2>
-                          <p>Read the rendered guide, inspect the normalized markdown, audit canonical IR, or fall back to original source without leaving the documentation page.</p>
-                        </div>
-                      </div>
-                      <div className="preview-meta-grid">
-                        <div className="preview-meta-card">
-                          <span>Format</span>
-                          <strong>{selectedDocument?.format ?? activeDocumentSummary?.format ?? "n/a"}</strong>
-                        </div>
-                        <div className="preview-meta-card">
-                          <span>Blocks</span>
-                          <strong>{selectedDocumentMetrics?.blocks ?? 0}</strong>
-                        </div>
-                        <div className="preview-meta-card">
-                          <span>Resolved links</span>
-                          <strong>{selectedDocumentMetrics?.resolvedLinks ?? 0}</strong>
-                        </div>
-                        <div className="preview-meta-card">
-                          <span>Diagnostics</span>
-                          <strong>{selectedDocumentMetrics?.diagnostics ?? 0}</strong>
-                        </div>
-                      </div>
-                    </div>
 
                     <div className="preview-body">
                       <div className="preview-stage" ref={previewStageRef}>
@@ -1937,10 +1865,10 @@ export function App() {
                   </section>
                 </section>
 
-                <aside className="page-side-stack docs-context-rail">
-                  <section className="panel docs-context-panel" id="reader-outline">
+                <aside className="reader-classic-rail">
+                  <section className="panel reader-rail-panel" id="reader-outline">
                     <div className="section-heading">
-                      <h2>On this page</h2>
+                      <h2>In this article</h2>
                       <p>{selectedDocument?.toc.length ?? 0} headings</p>
                     </div>
                     <ul className="toc-list docs-toc-list panel-scroll">
@@ -1967,60 +1895,30 @@ export function App() {
                     />
                   </section>
 
-                  <section className="panel docs-context-panel" id="reader-graph">
+                  <section className="panel reader-rail-panel">
                     <div className="section-heading">
-                      <h2>Document health</h2>
-                      <p>{selectedDocumentMetrics?.graphIntegrity ?? 0}% resolved</p>
+                      <h2>Context</h2>
+                      <p>{readerRelatedDocuments.length} related</p>
                     </div>
-                    <div className="mini-metric-grid docs-health-grid">
-                      <div className="mini-metric-card">
-                        <span>Outgoing</span>
-                        <strong>{selectedDocumentMetrics?.outgoingLinks ?? 0}</strong>
-                      </div>
-                      <div className="mini-metric-card">
-                        <span>Backlinks</span>
-                        <strong>{selectedDocumentMetrics?.backlinks ?? 0}</strong>
-                      </div>
-                      <div className="mini-metric-card">
-                        <span>Resolved</span>
-                        <strong>{selectedDocumentMetrics?.resolvedLinks ?? 0}</strong>
-                      </div>
-                      <div className="mini-metric-card">
-                        <span>Raw embeds</span>
-                        <strong>{selectedDocumentMetrics?.rawEmbeds ?? 0}</strong>
-                      </div>
-                      <div className="mini-metric-card">
-                        <span>Warnings</span>
-                        <strong>{selectedDocumentMetrics?.warnings ?? 0}</strong>
-                      </div>
-                      <div className="mini-metric-card">
-                        <span>Errors</span>
-                        <strong>{selectedDocumentMetrics?.errors ?? 0}</strong>
-                      </div>
+                    <div className="recommendation-list">
+                      {readerRelatedDocuments.map((document) => (
+                        <button
+                          className="recommendation-card"
+                          key={document.docId}
+                          onClick={() => openDocument(document.docId, { nextPage: "reader" })}
+                          type="button"
+                        >
+                          <strong>{documentLabel(document)}</strong>
+                          <span>{document.path}</span>
+                        </button>
+                      ))}
+                      {readerRelatedDocuments.length === 0 ? <p className="supporting-copy compact">Import more documents to build related reading paths.</p> : null}
                     </div>
-                    {readerRelatedDocuments.length > 0 ? (
-                      <div className="docs-context-links">
-                        <strong>Continue reading</strong>
-                        <div className="recommendation-list">
-                          {readerRelatedDocuments.map((document) => (
-                            <button
-                              className="recommendation-card"
-                              key={document.docId}
-                              onClick={() => openDocument(document.docId, { nextPage: "reader" })}
-                              type="button"
-                            >
-                              <strong>{documentLabel(document)}</strong>
-                              <span>{document.path}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
                   </section>
 
-                  <section className="panel docs-context-panel" id="reader-diagnostics">
+                  <section className="panel reader-rail-panel" id="reader-diagnostics">
                     <div className="section-heading">
-                      <h2>Conversion notes</h2>
+                      <h2>Reader notes</h2>
                       <p>{selectedDocumentMetrics?.diagnostics ?? 0} items</p>
                     </div>
                     <div className="diagnostic-list panel-scroll">
@@ -2046,22 +1944,14 @@ export function App() {
 
           {page === "metrics" ? (
             <section className="page-stack">
-              <section className="panel page-intro-panel" id="metrics-top">
+              <section className="panel workflow-page-header" id="metrics-top">
                 <div className="page-title-row">
                   <div className="page-title-copy">
-                    <p className="eyebrow">Metrics page</p>
-                    <h1>Evaluation, fidelity, and live compiler analysis stay separate from the reading surface.</h1>
+                    <p className="eyebrow">Metrics</p>
+                    <h1>Evaluation, fidelity, diagnostics, and system health only.</h1>
                     <p className="supporting-copy">
-                      Track platform throughput, document quality, graph integrity, and diagnostics without crowding the documentation page.
+                      Review the selected document and the compiler platform without mixing reading or import workflows into this page.
                     </p>
-                    <div className="hero-actions">
-                      <button className="cta-primary" onClick={() => navigateToPage("reader")} type="button">
-                        Open documentation page
-                      </button>
-                      <button className="cta-secondary" onClick={() => navigateToPage("conversion")} type="button">
-                        Start another conversion
-                      </button>
-                    </div>
                   </div>
                   <div className="summary-pill-row">
                     <span className="reader-chip">Docs {libraryOverview.documents}</span>
@@ -2070,8 +1960,6 @@ export function App() {
                   </div>
                 </div>
               </section>
-
-              <SectionNavigation activeSectionId={activeSectionId} onNavigate={navigateToSection} page="metrics" />
 
               <div className="metrics-page-grid">
                 <section className="panel" id="metrics-evaluation">

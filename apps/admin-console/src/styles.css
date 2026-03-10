@@ -272,6 +272,47 @@ a {
   text-align: right;
 }
 
+.site-header-classic {
+  top: 12px;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  border-radius: 24px;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+}
+
+.mark-compact {
+  width: 72px;
+  height: 72px;
+  border-radius: 22px;
+  box-shadow: none;
+  font-size: 1rem;
+}
+
+.site-reader-tools {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.site-search input {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  padding: 0 16px;
+  background: rgba(255, 255, 255, 0.92);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.site-search input:focus {
+  outline: none;
+  border-color: rgba(17, 94, 89, 0.28);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.08);
+}
+
 .site-error-banner {
   position: relative;
   z-index: 1;
@@ -489,9 +530,7 @@ a {
   gap: 10px;
   padding: 10px;
   border-radius: 999px;
-  position: sticky;
-  top: 122px;
-  z-index: 16;
+  position: relative;
   background: rgba(255, 255, 255, 0.78);
   border: 1px solid rgba(109, 128, 160, 0.14);
   width: max-content;
@@ -838,6 +877,172 @@ a {
 
 .metrics-page-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workflow-page-header {
+  padding: 24px 28px;
+  border-radius: 22px;
+}
+
+.workflow-page-header h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 3.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  max-width: 14ch;
+}
+
+.reader-classic-page {
+  gap: 18px;
+}
+
+.reader-classic-page .panel {
+  border-radius: 22px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: none;
+}
+
+.reader-classic-page .panel::before {
+  display: none;
+}
+
+.reader-classic-breadcrumb-row,
+.reader-classic-title-row,
+.reader-article-title-row,
+.reader-classic-canvas-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: start;
+}
+
+.reader-classic-title-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.reader-classic-title-copy h1 {
+  margin: 0;
+  font-size: clamp(2.3rem, 3.6vw, 4.6rem);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  max-width: 12ch;
+}
+
+.reader-classic-summary,
+.reader-classic-actions {
+  align-items: start;
+}
+
+.reader-classic-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  max-width: 440px;
+}
+
+.reader-classic-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr) minmax(240px, 300px);
+  gap: 24px;
+  align-items: start;
+}
+
+.reader-classic-sidebar,
+.reader-classic-rail {
+  position: sticky;
+  top: 118px;
+  align-self: start;
+}
+
+.reader-sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.reader-sidebar-header h2 {
+  margin: 0;
+  font-size: 1.18rem;
+  letter-spacing: -0.02em;
+}
+
+.reader-sidebar-header p,
+.reader-classic-breadcrumb,
+.reader-rail-panel .section-heading p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.reader-sidebar-toggle {
+  margin: 0 0 14px;
+}
+
+.reader-sidebar-list {
+  max-height: min(68vh, 1200px);
+}
+
+.reader-classic-article {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.reader-article-header {
+  display: grid;
+  gap: 16px;
+}
+
+.reader-classic-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.reader-classic-canvas .preview-body {
+  padding-top: 18px;
+}
+
+.reader-classic-canvas .preview-stage {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.reader-classic-canvas .preview-stage::before {
+  display: none;
+}
+
+.reader-classic-canvas .preview-surface {
+  min-height: auto;
+}
+
+.reader-classic-canvas .dg-doc {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+}
+
+.reader-classic-canvas .code-pane {
+  width: 100%;
+  height: min(76vh, 1100px);
+  border-radius: 18px;
+}
+
+.reader-classic-rail {
+  display: grid;
+  gap: 18px;
+}
+
+.reader-rail-panel {
+  overflow: hidden;
 }
 
 .panel {
@@ -1751,10 +1956,20 @@ a {
     grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   }
 
+  .reader-classic-grid {
+    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  }
+
   .reader-docs-grid > .docs-context-rail {
     grid-column: 1 / -1;
     position: static;
     display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .reader-classic-rail {
+    grid-column: 1 / -1;
+    position: static;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -1769,21 +1984,29 @@ a {
   .overview-grid,
   .conversion-grid,
   .reader-page-grid,
+  .reader-classic-grid,
   .metrics-page-grid {
     grid-template-columns: 1fr;
   }
 
   .docs-action-grid,
-  .docs-meta-row {
+  .docs-meta-row,
+  .reader-classic-meta-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .docs-nav-panel,
-  .docs-context-rail {
+  .docs-context-rail,
+  .reader-classic-sidebar,
+  .reader-classic-rail {
     position: static;
   }
 
   .reader-docs-grid > .docs-context-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .reader-classic-rail {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1817,8 +2040,8 @@ a {
     top: 12px;
   }
 
-  .local-nav {
-    top: 102px;
+  .site-header-classic {
+    grid-template-columns: 1fr;
   }
 
   .brand-block,
@@ -1827,7 +2050,11 @@ a {
   .docs-content-topbar,
   .page-title-row,
   .section-heading,
-  .job-card-header {
+  .job-card-header,
+  .reader-classic-breadcrumb-row,
+  .reader-classic-title-row,
+  .reader-article-title-row,
+  .reader-classic-canvas-bar {
     flex-direction: column;
     align-items: start;
   }
@@ -1848,6 +2075,10 @@ a {
     justify-items: stretch;
   }
 
+  .site-reader-tools {
+    grid-template-columns: 1fr;
+  }
+
   .page-switch {
     max-width: 100%;
   }
@@ -1858,6 +2089,8 @@ a {
   .hero-stat-grid,
   .metric-grid,
   .mini-metric-grid,
+  .reader-classic-meta-grid,
+  .reader-classic-rail,
   .lane-grid,
   .reader-page-grid > .page-side-stack:last-child,
   .reader-docs-grid > .docs-context-rail,
@@ -1892,6 +2125,10 @@ a {
   .dg-doc {
     padding: 24px 18px;
     font-size: 1rem;
+  }
+
+  .reader-classic-actions {
+    justify-content: flex-start;
   }
 }
 
