@@ -179,6 +179,10 @@ function pathDepth(path: string): number {
   return path.split("/").filter(Boolean).length;
 }
 
+function pathSegments(path: string): string[] {
+  return path.split("/").filter(Boolean);
+}
+
 function isInternalArtifactPath(path: string): boolean {
   return path
     .toLowerCase()
@@ -613,6 +617,11 @@ export function App() {
   );
 
   const readerTitle = useMemo(() => documentLabel(selectedDocumentEntry), [selectedDocumentEntry]);
+  const readerBreadcrumbs = useMemo(
+    () => (selectedDocumentEntry ? pathSegments(selectedDocumentEntry.path).slice(0, -1) : []),
+    [selectedDocumentEntry]
+  );
+  const readerRelatedDocuments = useMemo(() => recommendedDocuments.slice(0, 4), [recommendedDocuments]);
 
   const platformOverview = useMemo(() => {
     if (!platformMetrics) {
@@ -1674,25 +1683,26 @@ export function App() {
 
           {page === "reader" ? (
             <section className="page-stack">
-              <section className="panel reader-page-intro" id="reader-top">
-                <div className="page-title-row">
-                  <div className="page-title-copy">
-                    <p className="eyebrow">Documentation page</p>
-                    <h1>{readerTitle}</h1>
-                    <p className="supporting-copy">
-                      A dedicated reading surface with document preview, library navigation, outline, diagnostics, and continuation paths separated from import controls.
-                    </p>
-                    <p className="reader-path">{selectedDocumentEntry?.path ?? activeJob?.source?.label ?? "Awaiting import."}</p>
-                    <div className="hero-actions">
-                      <button className="cta-primary" onClick={() => navigateToPage("conversion")} type="button">
-                        Go to conversion page
-                      </button>
-                      <button className="cta-secondary" onClick={() => navigateToPage("metrics")} type="button">
-                        Inspect metrics
-                      </button>
-                    </div>
+              <section className="panel reader-page-intro docs-page-intro" id="reader-top">
+                <div className="docs-breadcrumb-row">
+                  <div className="docs-breadcrumb">
+                    <button className="docs-breadcrumb-home" onClick={() => navigateToPage("main")} type="button">
+                      Home
+                    </button>
+                    {readerBreadcrumbs.map((segment, index) => (
+                      <span className="docs-breadcrumb-segment" key={`${index}:${segment}`}>
+                        <span aria-hidden="true">/</span>
+                        {fallbackDocumentTitle(segment)}
+                      </span>
+                    ))}
+                    {selectedDocumentEntry ? (
+                      <span className="docs-breadcrumb-segment docs-breadcrumb-current">
+                        <span aria-hidden="true">/</span>
+                        {fallbackDocumentTitle(selectedDocumentEntry.path.split("/").at(-1) ?? selectedDocumentEntry.path)}
+                      </span>
+                    ) : null}
                   </div>
-                  <div className="summary-pill-row">
+                  <div className="summary-pill-row docs-summary-row">
                     <span className="reader-chip">{selectedDocument?.format ?? activeDocumentSummary?.format ?? "n/a"}</span>
                     <span className={`reader-chip tone-${toneForJobState(activeJob?.state ?? "queued")}`}>{formatStateLabel(activeJob?.state ?? "queued")}</span>
                     <span className={`reader-chip ${selectedDocumentIsInternal ? "tone-warning" : "tone-success"}`}>
@@ -1700,130 +1710,123 @@ export function App() {
                     </span>
                   </div>
                 </div>
+
+                <div className="docs-page-header">
+                  <div className="page-title-copy">
+                    <p className="eyebrow">Documentation page</p>
+                    <h1>{readerTitle}</h1>
+                    <p className="reader-path">{selectedDocumentEntry?.path ?? activeJob?.source?.label ?? "Awaiting import."}</p>
+                    <p className="supporting-copy">
+                      Converted documents should read like a polished docs site: clear section navigation on the left, uninterrupted content in the middle, and contextual guidance on the right.
+                    </p>
+                  </div>
+
+                  <div className="docs-action-grid">
+                    <button className="docs-utility-card" onClick={() => navigateToPage("conversion")} type="button">
+                      <strong>Go to conversion</strong>
+                      <span>Import another source or switch compilation jobs.</span>
+                    </button>
+                    <button className="docs-utility-card" onClick={() => navigateToPage("metrics")} type="button">
+                      <strong>Inspect metrics</strong>
+                      <span>Review fidelity, graph health, and diagnostics separately.</span>
+                    </button>
+                    <button
+                      className="docs-utility-card"
+                      onClick={() => {
+                        setReaderView("source");
+                        setPendingSectionId("reader-canvas");
+                      }}
+                      type="button"
+                    >
+                      <strong>Open original source</strong>
+                      <span>Jump to the source view for this normalized artifact.</span>
+                    </button>
+                  </div>
+                </div>
+
+                {readerRelatedDocuments.length > 0 ? (
+                  <div className="docs-guide-strip">
+                    <strong>Related guides</strong>
+                    <div className="docs-guide-links">
+                      {readerRelatedDocuments.map((document) => (
+                        <button
+                          className="docs-guide-link"
+                          key={document.docId}
+                          onClick={() => openDocument(document.docId, { nextPage: "reader" })}
+                          type="button"
+                        >
+                          {documentLabel(document)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </section>
 
               <SectionNavigation activeSectionId={activeSectionId} onNavigate={navigateToSection} page="reader" />
 
-              <div className="reader-page-grid">
-                <aside className="page-side-stack">
-                  <section className="panel" id="reader-library">
-                    <div className="section-heading">
-                      <h2>Library</h2>
-                      <p>
-                        {filteredDocuments.length}/{libraryOverview.documents} visible
-                      </p>
-                    </div>
-                    <p className="supporting-copy">
-                      {libraryOverview.readerDocuments} reader documents · {libraryOverview.internalArtifacts} internal artifacts
+              <div className="reader-page-grid reader-docs-grid">
+                <aside className="panel docs-nav-panel" id="reader-library">
+                  <div className="section-heading">
+                    <h2>Section navigation</h2>
+                    <p>
+                      {filteredDocuments.length}/{libraryOverview.documents} visible
                     </p>
-                    <label className="document-filter">
-                      <span>Filter</span>
-                      <input
-                        value={documentFilter}
-                        onChange={(event) => setDocumentFilter(event.target.value)}
-                        placeholder="Search title, path, or format"
-                      />
-                    </label>
-                    <label className="toggle-control">
-                      <input
-                        checked={showInternalArtifacts}
-                        onChange={(event) => setShowInternalArtifacts(event.target.checked)}
-                        type="checkbox"
-                      />
-                      <span>Show internal artifacts and templates</span>
-                    </label>
-                    <div className="job-list artifact-list">
-                      {pagedDocuments.map((document) => (
-                        <button
-                          className={`job-card ${selectedDocumentId === document.docId ? "active" : ""}`}
-                          key={document.docId}
-                          onClick={() => openDocument(document.docId, { nextPage: "reader" })}
-                          type="button"
-                        >
-                          <div className="job-card-header">
-                            <strong>{documentLabel(document)}</strong>
-                            <div className="card-badge-row">
-                              <span className="status-pill neutral">{document.format}</span>
-                              <span className={`status-pill ${isInternalArtifactPath(document.path) ? "warning" : "success"}`}>
-                                {isInternalArtifactPath(document.path) ? "internal" : "reader"}
-                              </span>
-                            </div>
-                          </div>
-                          <span>{document.path}</span>
-                          <small>
-                            {document.diagnostics.length} diagnostics · {document.canonicalHash.slice(0, 10)}
-                          </small>
-                        </button>
-                      ))}
-                    </div>
-                    <PaginationControls
-                      page={libraryPagination.page}
-                      pageSize={libraryPagination.pageSize}
-                      totalItems={filteredDocuments.length}
-                      onPageChange={(nextPage) => setLibraryPagination((current) => ({ ...current, page: nextPage }))}
+                  </div>
+                  <p className="supporting-copy">
+                    Browse converted guides, tutorials, and reference pages from the active documentation corpus.
+                  </p>
+                  <label className="document-filter docs-nav-filter">
+                    <span>Search section navigation</span>
+                    <input
+                      value={documentFilter}
+                      onChange={(event) => setDocumentFilter(event.target.value)}
+                      placeholder="Search title, path, or format"
                     />
-                  </section>
-
-                  <section className="panel">
-                    <div className="section-heading">
-                      <h2>Continue reading</h2>
-                      <p>{recommendedDocuments.length} suggestions</p>
-                    </div>
-                    <p className="supporting-copy">Resolved graph neighbors and backlinks around the current document.</p>
-                    <div className="recommendation-list">
-                      {recommendedDocuments.map((document) => (
-                        <button
-                          className="recommendation-card"
-                          key={document.docId}
-                          onClick={() => openDocument(document.docId, { nextPage: "reader" })}
-                          type="button"
-                        >
-                          <strong>{documentLabel(document)}</strong>
-                          <span>{document.path}</span>
-                        </button>
-                      ))}
-                      {recommendedDocuments.length === 0 ? <p className="supporting-copy compact">No resolved adjacent documents yet.</p> : null}
-                    </div>
-                  </section>
+                  </label>
+                  <label className="toggle-control">
+                    <input
+                      checked={showInternalArtifacts}
+                      onChange={(event) => setShowInternalArtifacts(event.target.checked)}
+                      type="checkbox"
+                    />
+                    <span>Show internal artifacts and templates</span>
+                  </label>
+                  <div className="docs-nav-list artifact-list">
+                    {pagedDocuments.map((document) => (
+                      <button
+                        className={`docs-nav-item ${selectedDocumentId === document.docId ? "active" : ""}`}
+                        key={document.docId}
+                        onClick={() => openDocument(document.docId, { nextPage: "reader" })}
+                        type="button"
+                      >
+                        <span className="docs-nav-item-title">{documentLabel(document)}</span>
+                        <span className="docs-nav-item-path">{document.path}</span>
+                        <span className="docs-nav-item-meta">
+                          {document.format} · {document.diagnostics.length} diagnostics
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <PaginationControls
+                    page={libraryPagination.page}
+                    pageSize={libraryPagination.pageSize}
+                    totalItems={filteredDocuments.length}
+                    onPageChange={(nextPage) => setLibraryPagination((current) => ({ ...current, page: nextPage }))}
+                  />
                 </aside>
 
-                <section className="preview-column">
-                  <section className="panel reader-header">
-                    <div className="reader-header-copy">
-                      <p className="eyebrow">Document state</p>
-                      <h2>Reading analysis</h2>
-                      <p className="supporting-copy compact">
-                        Reader fidelity, graph integrity, and compile progress are kept above the canvas so the document body stays uninterrupted.
-                      </p>
+                <section className="preview-column docs-content-column">
+                  <section className="panel reader-header docs-reader-header">
+                    <div className="section-heading">
+                      <h2>Guide overview</h2>
+                      <p>{selectedDocumentMetrics?.wordCount ?? 0} words</p>
                     </div>
-
-                    <div className="metric-grid">
-                      <div className="metric-card">
-                        <span>Fidelity</span>
-                        <strong>{selectedDocumentMetrics?.fidelityTier ?? "A-"}</strong>
-                      </div>
-                      <div className="metric-card">
-                        <span>Words</span>
-                        <strong>{selectedDocumentMetrics ? compactNumberFormatter.format(selectedDocumentMetrics.wordCount) : "0"}</strong>
-                      </div>
-                      <div className="metric-card">
-                        <span>Graph integrity</span>
-                        <strong>{selectedDocumentMetrics ? `${selectedDocumentMetrics.graphIntegrity}%` : "0%"}</strong>
-                      </div>
-                      <div className="metric-card">
-                        <span>Job progress</span>
-                        <strong>{activeJobOverview ? `${activeJobOverview.completion}%` : "0%"}</strong>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section className="panel preview-panel" id="reader-canvas">
-                    <div className="preview-toolbar">
-                      <div className="preview-heading">
-                        <div>
-                          <h2>Document canvas</h2>
-                          <p>Rendered preview, markdown export, canonical IR, and original source stay on the same artifact without pushing users back into ingestion mode.</p>
-                        </div>
+                    <div className="docs-content-topbar">
+                      <div className="reader-header-copy">
+                        <p className="eyebrow">Guide</p>
+                        <h2>{readerTitle}</h2>
+                        <p className="reader-path">{selectedDocumentEntry?.path ?? activeJob?.source?.label ?? "Awaiting import."}</p>
                       </div>
                       <div className="preview-toolbar-actions">
                         <div className="view-switch" role="tablist" aria-label="Document views">
@@ -1857,18 +1860,47 @@ export function App() {
                           </button>
                         </div>
                       </div>
+                    </div>
+                    <div className="docs-meta-row">
+                      <div className="metric-card">
+                        <span>Fidelity</span>
+                        <strong>{selectedDocumentMetrics?.fidelityTier ?? "A-"}</strong>
+                      </div>
+                      <div className="metric-card">
+                        <span>Graph integrity</span>
+                        <strong>{selectedDocumentMetrics ? `${selectedDocumentMetrics.graphIntegrity}%` : "0%"}</strong>
+                      </div>
+                      <div className="metric-card">
+                        <span>Headings</span>
+                        <strong>{selectedDocumentMetrics?.headings ?? 0}</strong>
+                      </div>
+                      <div className="metric-card">
+                        <span>Job progress</span>
+                        <strong>{activeJobOverview ? `${activeJobOverview.completion}%` : "0%"}</strong>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="panel preview-panel docs-preview-panel" id="reader-canvas">
+                    <div className="preview-toolbar docs-preview-toolbar">
+                      <div className="preview-heading">
+                        <div>
+                          <h2>Documentation canvas</h2>
+                          <p>Read the rendered guide, inspect the normalized markdown, audit canonical IR, or fall back to original source without leaving the documentation page.</p>
+                        </div>
+                      </div>
                       <div className="preview-meta-grid">
                         <div className="preview-meta-card">
                           <span>Format</span>
                           <strong>{selectedDocument?.format ?? activeDocumentSummary?.format ?? "n/a"}</strong>
                         </div>
                         <div className="preview-meta-card">
-                          <span>Headings</span>
-                          <strong>{selectedDocumentMetrics?.headings ?? 0}</strong>
-                        </div>
-                        <div className="preview-meta-card">
                           <span>Blocks</span>
                           <strong>{selectedDocumentMetrics?.blocks ?? 0}</strong>
+                        </div>
+                        <div className="preview-meta-card">
+                          <span>Resolved links</span>
+                          <strong>{selectedDocumentMetrics?.resolvedLinks ?? 0}</strong>
                         </div>
                         <div className="preview-meta-card">
                           <span>Diagnostics</span>
@@ -1905,13 +1937,42 @@ export function App() {
                   </section>
                 </section>
 
-                <aside className="page-side-stack">
-                  <section className="panel" id="reader-graph">
+                <aside className="page-side-stack docs-context-rail">
+                  <section className="panel docs-context-panel" id="reader-outline">
                     <div className="section-heading">
-                      <h2>Graph</h2>
+                      <h2>On this page</h2>
+                      <p>{selectedDocument?.toc.length ?? 0} headings</p>
+                    </div>
+                    <ul className="toc-list docs-toc-list panel-scroll">
+                      {pagedTocEntries.map((entry) => (
+                        <li key={entry.slug} style={{ paddingLeft: `${(entry.level - 1) * 12}px` }}>
+                          <button
+                            className="toc-button"
+                            onClick={() => {
+                              setReaderView("rendered");
+                              setPendingAnchor(entry.slug);
+                            }}
+                            type="button"
+                          >
+                            {entry.title}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <PaginationControls
+                      page={tocPagination.page}
+                      pageSize={tocPagination.pageSize}
+                      totalItems={selectedDocument?.toc.length ?? 0}
+                      onPageChange={(nextPage) => setTocPagination((current) => ({ ...current, page: nextPage }))}
+                    />
+                  </section>
+
+                  <section className="panel docs-context-panel" id="reader-graph">
+                    <div className="section-heading">
+                      <h2>Document health</h2>
                       <p>{selectedDocumentMetrics?.graphIntegrity ?? 0}% resolved</p>
                     </div>
-                    <div className="mini-metric-grid">
+                    <div className="mini-metric-grid docs-health-grid">
                       <div className="mini-metric-card">
                         <span>Outgoing</span>
                         <strong>{selectedDocumentMetrics?.outgoingLinks ?? 0}</strong>
@@ -1937,40 +1998,29 @@ export function App() {
                         <strong>{selectedDocumentMetrics?.errors ?? 0}</strong>
                       </div>
                     </div>
+                    {readerRelatedDocuments.length > 0 ? (
+                      <div className="docs-context-links">
+                        <strong>Continue reading</strong>
+                        <div className="recommendation-list">
+                          {readerRelatedDocuments.map((document) => (
+                            <button
+                              className="recommendation-card"
+                              key={document.docId}
+                              onClick={() => openDocument(document.docId, { nextPage: "reader" })}
+                              type="button"
+                            >
+                              <strong>{documentLabel(document)}</strong>
+                              <span>{document.path}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </section>
 
-                  <section className="panel" id="reader-outline">
+                  <section className="panel docs-context-panel" id="reader-diagnostics">
                     <div className="section-heading">
-                      <h2>Outline</h2>
-                      <p>{selectedDocument?.toc.length ?? 0} headings</p>
-                    </div>
-                    <ul className="toc-list panel-scroll">
-                      {pagedTocEntries.map((entry) => (
-                        <li key={entry.slug} style={{ paddingLeft: `${(entry.level - 1) * 12}px` }}>
-                          <button
-                            className="toc-button"
-                            onClick={() => {
-                              setReaderView("rendered");
-                              setPendingAnchor(entry.slug);
-                            }}
-                            type="button"
-                          >
-                            {entry.title}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                    <PaginationControls
-                      page={tocPagination.page}
-                      pageSize={tocPagination.pageSize}
-                      totalItems={selectedDocument?.toc.length ?? 0}
-                      onPageChange={(nextPage) => setTocPagination((current) => ({ ...current, page: nextPage }))}
-                    />
-                  </section>
-
-                  <section className="panel" id="reader-diagnostics">
-                    <div className="section-heading">
-                      <h2>Diagnostics</h2>
+                      <h2>Conversion notes</h2>
                       <p>{selectedDocumentMetrics?.diagnostics ?? 0} items</p>
                     </div>
                     <div className="diagnostic-list panel-scroll">
@@ -1980,6 +2030,7 @@ export function App() {
                           <p>{diagnostic.message}</p>
                         </div>
                       ))}
+                      {pagedDiagnostics.length === 0 ? <p className="supporting-copy compact">No diagnostics on the selected document.</p> : null}
                     </div>
                     <PaginationControls
                       page={diagnosticPagination.page}

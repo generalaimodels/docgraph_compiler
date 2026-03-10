@@ -579,6 +579,263 @@ a {
   align-items: start;
 }
 
+.docs-page-intro {
+  display: grid;
+  gap: 20px;
+}
+
+.docs-page-intro h1 {
+  font-size: clamp(2.4rem, 3vw, 4rem);
+  max-width: 12ch;
+}
+
+.docs-breadcrumb-row,
+.docs-page-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: start;
+}
+
+.docs-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.docs-breadcrumb-home,
+.docs-guide-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.docs-breadcrumb-segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.docs-breadcrumb-current {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.docs-summary-row {
+  flex: 0 0 auto;
+}
+
+.docs-action-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: min(100%, 860px);
+}
+
+.docs-utility-card {
+  display: grid;
+  gap: 8px;
+  min-height: 112px;
+  padding: 18px 20px;
+  text-align: left;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(109, 128, 160, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(241, 245, 255, 0.84)),
+    linear-gradient(135deg, rgba(29, 78, 216, 0.06), transparent);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.05);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.docs-utility-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(29, 78, 216, 0.24);
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.08);
+}
+
+.docs-utility-card strong {
+  font-size: 0.96rem;
+}
+
+.docs-utility-card span {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.docs-guide-strip {
+  display: grid;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(109, 128, 160, 0.14);
+}
+
+.docs-guide-strip strong,
+.docs-context-links strong {
+  font-size: 0.92rem;
+  letter-spacing: -0.02em;
+}
+
+.docs-guide-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.docs-guide-link {
+  color: var(--accent-strong);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: rgba(29, 78, 216, 0.22);
+  text-underline-offset: 0.16em;
+}
+
+.reader-docs-grid {
+  grid-template-columns: minmax(250px, 300px) minmax(0, 1.1fr) minmax(240px, 300px);
+  gap: 24px;
+}
+
+.docs-nav-panel {
+  position: sticky;
+  top: 176px;
+  align-self: start;
+}
+
+.docs-nav-filter {
+  margin-bottom: 4px;
+}
+
+.docs-nav-list {
+  display: grid;
+  gap: 8px;
+}
+
+.docs-nav-panel .artifact-list {
+  max-height: min(70vh, 1600px);
+}
+
+.docs-nav-item {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  padding: 14px 14px 14px 16px;
+  text-align: left;
+  border: 1px solid rgba(109, 128, 160, 0.12);
+  border-left: 3px solid transparent;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.docs-nav-item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(29, 78, 216, 0.18);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.docs-nav-item.active {
+  border-color: rgba(29, 78, 216, 0.22);
+  border-left-color: var(--accent);
+  background: linear-gradient(180deg, rgba(232, 241, 255, 0.96), rgba(255, 255, 255, 0.86));
+}
+
+.docs-nav-item-title {
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.docs-nav-item-path,
+.docs-nav-item-meta {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.docs-content-column {
+  gap: 18px;
+}
+
+.docs-reader-header {
+  gap: 16px;
+}
+
+.docs-content-topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+}
+
+.docs-meta-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.docs-preview-panel {
+  min-height: 84vh;
+}
+
+.docs-preview-toolbar {
+  gap: 14px;
+}
+
+.docs-preview-panel .preview-stage {
+  padding: 18px;
+  background: rgba(247, 249, 252, 0.92);
+  border: 1px solid rgba(109, 128, 160, 0.12);
+}
+
+.docs-preview-panel .preview-stage::before {
+  display: none;
+}
+
+.docs-preview-panel .dg-doc {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(109, 128, 160, 0.14);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.docs-context-rail {
+  position: sticky;
+  top: 176px;
+  align-self: start;
+}
+
+.docs-context-panel {
+  overflow: visible;
+}
+
+.docs-toc-list {
+  max-height: min(34vh, 640px);
+}
+
+.docs-health-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.docs-context-links {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(109, 128, 160, 0.14);
+}
+
 .metrics-page-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -1494,6 +1751,13 @@ a {
     grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   }
 
+  .reader-docs-grid > .docs-context-rail {
+    grid-column: 1 / -1;
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .reader-page-grid > .page-side-stack:last-child {
     grid-column: 1 / -1;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1507,6 +1771,20 @@ a {
   .reader-page-grid,
   .metrics-page-grid {
     grid-template-columns: 1fr;
+  }
+
+  .docs-action-grid,
+  .docs-meta-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .docs-nav-panel,
+  .docs-context-rail {
+    position: static;
+  }
+
+  .reader-docs-grid > .docs-context-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .reader-page-grid > .page-side-stack:last-child {
@@ -1544,6 +1822,9 @@ a {
   }
 
   .brand-block,
+  .docs-breadcrumb-row,
+  .docs-page-header,
+  .docs-content-topbar,
   .page-title-row,
   .section-heading,
   .job-card-header {
@@ -1572,11 +1853,14 @@ a {
   }
 
   .page-card-grid,
+  .docs-action-grid,
+  .docs-meta-row,
   .hero-stat-grid,
   .metric-grid,
   .mini-metric-grid,
   .lane-grid,
   .reader-page-grid > .page-side-stack:last-child,
+  .reader-docs-grid > .docs-context-rail,
   .metrics-page-grid,
   .preview-meta-grid {
     grid-template-columns: 1fr;
@@ -1588,6 +1872,7 @@ a {
   }
 
   .page-card,
+  .docs-utility-card,
   .hero-chip,
   .lane-card,
   .metric-card,
